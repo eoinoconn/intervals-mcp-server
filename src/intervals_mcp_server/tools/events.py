@@ -4,14 +4,12 @@ Event-related MCP tools for Intervals.icu.
 This module contains tools for retrieving, creating, updating, and deleting athlete events.
 """
 
-import json
 from datetime import datetime
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
-from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
 
@@ -68,16 +66,16 @@ def _handle_event_response(
     action: str,
     athlete_id: str,
     start_date: str,
-) -> str:
+) -> Any:
     """Handle API response and format appropriate message."""
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error {action} event: {error_message}"
+        return {"success": False, "error": f"Error {action} event: {error_message}"}
     if not result:
-        return f"No events {action} for athlete {athlete_id}."
+        return {"success": False, "error": f"No events {action} for athlete {athlete_id}."}
     if isinstance(result, dict):
-        return f"Successfully {action} event: {json.dumps(result, indent=2)}"
-    return f"Event {action} successfully at {start_date}"
+        return {"success": True, "action": action, "event": result}
+    return {"success": True, "action": action, "start_date": start_date}
 
 
 async def _delete_events_list(
@@ -111,7 +109,7 @@ async def get_events(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
-) -> str:
+) -> Any:
     """Get events for an athlete from Intervals.icu
 
     Args:
@@ -140,26 +138,19 @@ async def get_events(
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching events: {error_message}"
+        return {"success": False, "error": f"Error: {error_message}"}
 
     # Format the response
     if not result:
-        return f"No events found for athlete {athlete_id_to_use} in the specified date range."
+        return {"success": False, "error": "No events found"}
 
     # Ensure result is a list
     events = result if isinstance(result, list) else []
 
     if not events:
-        return f"No events found for athlete {athlete_id_to_use} in the specified date range."
+        return {"success": False, "error": "No events found"}
 
-    events_summary = "Events:\n\n"
-    for event in events:
-        if not isinstance(event, dict):
-            continue
-
-        events_summary += format_event_summary(event) + "\n\n"
-
-    return events_summary
+    return events
 
 
 @mcp.tool()
@@ -167,7 +158,7 @@ async def get_event_by_id(
     event_id: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> str:
+) -> Any:
     """Get detailed information for a specific event from Intervals.icu
 
     Args:
@@ -187,16 +178,16 @@ async def get_event_by_id(
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching event details: {error_message}"
+        return {"success": False, "error": f"Error: {error_message}"}
 
     # Format the response
     if not result:
-        return f"No details found for event {event_id}."
+        return {"success": False, "error": "No details found"}
 
     if not isinstance(result, dict):
-        return f"Invalid event format for event {event_id}."
+        return {"success": False, "error": "Invalid event format"}
 
-    return format_event_details(result)
+    return result
 
 
 @mcp.tool()
@@ -204,7 +195,7 @@ async def delete_event(
     event_id: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> str:
+) -> Any:
     """Delete event for an athlete from Intervals.icu
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
@@ -215,13 +206,13 @@ async def delete_event(
     if error_msg:
         return error_msg
     if not event_id:
-        return "Error: No event ID provided."
+        return {"success": False, "error": "No event ID provided."}
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
     )
     if isinstance(result, dict) and "error" in result:
-        return f"Error deleting event: {result.get('message')}"
-    return json.dumps(result, indent=2)
+        return {"success": False, "error": f"Error: {result.get('message')}"}
+    return result
 
 
 async def _fetch_events_for_deletion(
@@ -254,7 +245,7 @@ async def delete_events_by_date_range(
     end_date: str,
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> str:
+) -> Any:
     """Delete events for an athlete from Intervals.icu in the specified date range.
 
     Args:
@@ -275,7 +266,7 @@ async def delete_events_by_date_range(
 
     failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
     deleted_count = len(events) - len(failed_events)
-    return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
+    return {"success": True, "deleted_count": deleted_count, "failed_events": failed_events}
 
 
 @mcp.tool()
@@ -289,7 +280,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
     workout_doc: WorkoutDoc | None = None,
     moving_time: int | None = None,
     distance: int | None = None,
-) -> str:
+) -> Any:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
 
@@ -370,7 +361,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
             athlete_id_to_use, api_key, event_data, start_date, event_id
         )
     except ValueError as e:
-        return f"Error: {e}"
+        return {"success": False, "error": f"Error: {e}"}
 
 
 async def _create_or_update_event_request(
@@ -379,7 +370,7 @@ async def _create_or_update_event_request(
     event_data: dict[str, Any],
     start_date: str,
     event_id: str | None,
-) -> str:
+) -> Any:
     """Create or update an event via API request.
 
     Args:

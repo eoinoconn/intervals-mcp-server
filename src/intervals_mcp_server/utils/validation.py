@@ -49,7 +49,7 @@ def validate_date(date_str: str) -> str:
 
 def resolve_athlete_id(
     athlete_id: str | None, default_athlete_id: str = ""
-) -> tuple[str, str | None]:
+) -> tuple[str, dict | None]:
     """Resolve athlete ID from parameter or default, with error message if missing.
 
     Args:
@@ -65,7 +65,7 @@ def resolve_athlete_id(
     if not athlete_id_to_use:
         return (
             "",
-            "Error: No athlete ID provided and no default ATHLETE_ID found in environment variables.",
+            {"success": False, "error": "No athlete ID provided and no default ATHLETE_ID found in environment variables."},
         )
     return athlete_id_to_use, None
 

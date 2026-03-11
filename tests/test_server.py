@@ -57,8 +57,7 @@ def test_get_activities(monkeypatch):
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
     result = asyncio.run(get_activities(athlete_id="1", limit=1, include_unnamed=True))
-    assert "Morning Ride" in result
-    assert "Activities:" in result
+    assert result[0]["name"] == "Morning Ride"
 
 
 def test_get_activity_details(monkeypatch):
@@ -83,7 +82,7 @@ def test_get_activity_details(monkeypatch):
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
     result = asyncio.run(get_activity_details(123))
-    assert "Activity: Morning Ride" in result
+    assert result["name"] == "Morning Ride"
 
 
 def test_get_events(monkeypatch):
@@ -105,8 +104,7 @@ def test_get_events(monkeypatch):
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
     result = asyncio.run(get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02"))
-    assert "Test Event" in result
-    assert "Events:" in result
+    assert result[0]["name"] == "Test Event"
 
 
 def test_get_event_by_id(monkeypatch):
@@ -128,8 +126,7 @@ def test_get_event_by_id(monkeypatch):
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
-    assert "Event Details:" in result
-    assert "Test Event" in result
+    assert result["name"] == "Test Event"
 
 
 def test_get_wellness_data(monkeypatch):
@@ -151,8 +148,8 @@ def test_get_wellness_data(monkeypatch):
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
     result = asyncio.run(get_wellness_data(athlete_id="1"))
-    assert "Wellness Data:" in result
     assert "2024-01-01" in result
+    assert result["2024-01-01"]["ctl"] == 75
 
 
 def test_get_activity_intervals(monkeypatch):
@@ -169,8 +166,8 @@ def test_get_activity_intervals(monkeypatch):
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
     result = asyncio.run(get_activity_intervals("123"))
-    assert "Intervals Analysis:" in result
-    assert "Rep 1" in result
+    assert "icu_intervals" in result
+    assert result["icu_intervals"][0]["label"] == "Rep 1"
 
 
 def test_get_activity_streams(monkeypatch):
@@ -219,11 +216,9 @@ def test_get_activity_streams(monkeypatch):
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
     result = asyncio.run(get_activity_streams("i107537962"))
-    assert "Activity Streams" in result
-    assert "time" in result
-    assert "watts" in result
-    assert "heartrate" in result
-    assert "Data Points: 11" in result
+    assert isinstance(result, list)
+    assert len(result) == 3
+    assert result[0]["type"] == "time"
 
 
 def test_add_or_update_event(monkeypatch):
@@ -251,6 +246,5 @@ def test_add_or_update_event(monkeypatch):
             athlete_id="i1", start_date="2024-01-15", name="Test Workout", workout_type="Ride"
         )
     )
-    assert "Successfully created event:" in result
-    assert '"id": "e123"' in result
-    assert '"name": "Test Workout"' in result
+    assert result["success"] is True
+    assert result["event"]["id"] == "e123"
