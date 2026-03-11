@@ -9,7 +9,11 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_activity_summary, format_intervals
+from intervals_mcp_server.utils.formatting import (
+    format_activity_compact,
+    format_activity_summary,
+    format_intervals,
+)
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -80,6 +84,7 @@ def _format_activities_response(
     activities: list[dict[str, Any]],
     athlete_id: str,
     include_unnamed: bool,
+    compact: bool = False,
 ) -> str:
     """Format the activities response based on the results."""
     if not activities:
@@ -89,13 +94,11 @@ def _format_activities_response(
             )
         return f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."
 
-    # Format the output
+    formatter = format_activity_compact if compact else format_activity_summary
     activities_summary = "Activities:\n\n"
     for activity in activities:
         if isinstance(activity, dict):
-            activities_summary += format_activity_summary(activity) + "\n"
-        else:
-            activities_summary += f"Invalid activity format: {activity}\n\n"
+            activities_summary += formatter(activity) + "\n"
 
     return activities_summary
 
@@ -108,6 +111,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     end_date: str | None = None,
     limit: int = 10,
     include_unnamed: bool = False,
+    compact: bool = True,
 ) -> str:
     """Get a list of activities for an athlete from Intervals.icu
 
@@ -118,6 +122,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
         limit: Maximum number of activities to return (optional, defaults to 10)
         include_unnamed: Whether to include unnamed activities (optional, defaults to False)
+        compact: If True, return a brief one-line-per-activity summary to save tokens (optional, defaults to True)
     """
     # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -163,7 +168,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     # Limit to requested count
     activities = activities[:limit]
 
-    return _format_activities_response(activities, athlete_id_to_use, include_unnamed)
+    return _format_activities_response(activities, athlete_id_to_use, include_unnamed, compact)
 
 
 @mcp.tool()
