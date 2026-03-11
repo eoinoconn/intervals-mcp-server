@@ -6,7 +6,10 @@ This module contains tools for retrieving athlete wellness data.
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_wellness_entry
+from intervals_mcp_server.utils.formatting import (
+    WELLNESS_FIELDS,
+    format_wellness_entry,
+)
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -21,6 +24,8 @@ async def get_wellness_data(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    fields: list[str] | None = None,
+    cadence: int | None = None,
 ) -> str:
     """Get wellness data for an athlete from Intervals.icu
 
@@ -29,6 +34,11 @@ async def get_wellness_data(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
         end_date: End date in YYYY-MM-DD format (optional, defaults to today)
+        fields: List of wellness sections to include (optional, defaults to all).
+            Valid values: "training", "sport_info", "vital_signs", "sleep",
+            "menstrual", "subjective", "nutrition", "activity".
+        cadence: Return every Nth day of data (optional). For example, cadence=7
+            returns one entry per week. Must be a positive integer.
     """
     # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -36,6 +46,21 @@ async def get_wellness_data(
         return error_msg
 
     start_date, end_date = resolve_date_params(start_date, end_date)
+
+    # Validate fields parameter
+    fields_set: set[str] | None = None
+    if fields:
+        invalid = set(fields) - WELLNESS_FIELDS
+        if invalid:
+            return (
+                f"Invalid field(s): {', '.join(sorted(invalid))}. "
+                f"Valid fields: {', '.join(sorted(WELLNESS_FIELDS))}"
+            )
+        fields_set = set(fields)
+
+    # Validate cadence parameter
+    if cadence is not None and cadence < 1:
+        return "Cadence must be a positive integer (1 or greater)."
 
     # Call the Intervals.icu API
     params = {"oldest": start_date, "newest": end_date}
@@ -53,18 +78,23 @@ async def get_wellness_data(
             f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
         )
 
-    wellness_summary = "Wellness Data:\n\n"
-
-    # Handle both list and dictionary responses
+    # Collect entries into a flat list
+    entries: list[dict] = []
     if isinstance(result, dict):
         for date_str, data in result.items():
-            # Add the date to the data dictionary if it's not already present
-            if isinstance(data, dict) and "date" not in data:
-                data["date"] = date_str
-            wellness_summary += format_wellness_entry(data) + "\n\n"
+            if isinstance(data, dict):
+                if "date" not in data:
+                    data["date"] = date_str
+                entries.append(data)
     elif isinstance(result, list):
-        for entry in result:
-            if isinstance(entry, dict):
-                wellness_summary += format_wellness_entry(entry) + "\n\n"
+        entries = [e for e in result if isinstance(e, dict)]
+
+    # Apply cadence filtering (keep every Nth entry)
+    if cadence is not None and cadence > 1:
+        entries = entries[::cadence]
+
+    wellness_summary = "Wellness Data:\n\n"
+    for entry in entries:
+        wellness_summary += format_wellness_entry(entry, fields=fields_set) + "\n\n"
 
     return wellness_summary
