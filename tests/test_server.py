@@ -155,6 +155,62 @@ def test_get_wellness_data(monkeypatch):
     assert "2024-01-01" in result
 
 
+def test_get_wellness_data_with_fields(monkeypatch):
+    """
+    Test that get_wellness_data filters sections when fields is provided.
+    """
+    wellness = [
+        {"id": "2024-01-01", "ctl": 75, "sleepSecs": 28800, "weight": 70},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return wellness
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
+    result = asyncio.run(get_wellness_data(athlete_id="1", fields=["vital_signs"]))
+    assert "Vital Signs:" in result
+    assert "Training Metrics:" not in result
+    assert "Sleep & Recovery:" not in result
+
+
+def test_get_wellness_data_invalid_fields(monkeypatch):
+    """
+    Test that get_wellness_data rejects invalid field names.
+    """
+    result = asyncio.run(get_wellness_data(athlete_id="1", fields=["invalid_field"]))
+    assert "Invalid field(s)" in result
+
+
+def test_get_wellness_data_with_cadence(monkeypatch):
+    """
+    Test that cadence parameter returns every Nth entry.
+    """
+    wellness = [
+        {"id": f"2024-01-{i:02d}", "ctl": i} for i in range(1, 15)
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return wellness
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
+    result = asyncio.run(get_wellness_data(athlete_id="1", cadence=7))
+    # 14 entries with cadence=7 -> entries at index 0 and 7 -> days 01 and 08
+    assert "2024-01-01" in result
+    assert "2024-01-08" in result
+    assert "2024-01-02" not in result
+    assert "2024-01-03" not in result
+
+
+def test_get_wellness_data_cadence_invalid(monkeypatch):
+    """
+    Test that cadence < 1 returns an error message.
+    """
+    result = asyncio.run(get_wellness_data(athlete_id="1", cadence=0))
+    assert "Cadence must be a positive integer" in result
+
+
 def test_get_activity_intervals(monkeypatch):
     """
     Test get_activity_intervals returns a formatted string with interval analysis for a given activity.

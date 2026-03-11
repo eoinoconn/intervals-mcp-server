@@ -6,6 +6,7 @@ These tests verify that the formatting functions produce expected output strings
 
 import json
 from intervals_mcp_server.utils.formatting import (
+    WELLNESS_FIELDS,
     format_activity_summary,
     format_workout,
     format_wellness_entry,
@@ -61,6 +62,59 @@ def test_format_wellness_entry():
     with open("tests/ressources/wellness_entry_formatted.txt", "r", encoding="utf-8") as f:
         expected_result = f.read()
     assert result == expected_result
+
+
+def test_format_wellness_entry_no_fields_matches_default():
+    """Passing fields=None should produce the same output as the default."""
+    with open("tests/ressources/wellness_entry.json", "r", encoding="utf-8") as f:
+        entry = json.load(f)
+    assert format_wellness_entry(entry) == format_wellness_entry(entry, fields=None)
+
+
+def test_format_wellness_entry_single_field():
+    """When a single field is requested, only that section appears."""
+    entry = {
+        "id": "2024-06-01",
+        "ctl": 70,
+        "atl": 90,
+        "weight": 75,
+        "sleepSecs": 28800,
+        "soreness": 5,
+        "steps": 10000,
+    }
+    result = format_wellness_entry(entry, fields={"vital_signs"})
+    assert "Vital Signs:" in result
+    assert "Weight: 75 kg" in result
+    # Other sections should be absent
+    assert "Training Metrics:" not in result
+    assert "Sleep & Recovery:" not in result
+    assert "Subjective Feelings:" not in result
+    assert "Activity:" not in result
+
+
+def test_format_wellness_entry_multiple_fields():
+    """Multiple selected fields should all appear, others excluded."""
+    entry = {
+        "id": "2024-06-01",
+        "ctl": 70,
+        "atl": 90,
+        "weight": 75,
+        "sleepSecs": 28800,
+        "soreness": 5,
+        "steps": 10000,
+    }
+    result = format_wellness_entry(entry, fields={"training", "sleep"})
+    assert "Training Metrics:" in result
+    assert "Sleep & Recovery:" in result
+    assert "Vital Signs:" not in result
+    assert "Activity:" not in result
+
+
+def test_wellness_fields_constant():
+    """WELLNESS_FIELDS should contain the expected section names."""
+    expected = {"training", "sport_info", "vital_signs", "sleep",
+                "menstrual", "subjective", "nutrition", "activity"}
+    assert WELLNESS_FIELDS == expected
 
 
 def test_format_event_summary():

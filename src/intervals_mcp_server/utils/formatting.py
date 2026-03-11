@@ -7,6 +7,18 @@ This module contains formatting functions for handling data from the Intervals.i
 from datetime import datetime
 from typing import Any
 
+# Valid field names for wellness entry filtering
+WELLNESS_FIELDS: set[str] = {
+    "training",
+    "sport_info",
+    "vital_signs",
+    "sleep",
+    "menstrual",
+    "subjective",
+    "nutrition",
+    "activity",
+}
+
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string."""
@@ -235,7 +247,7 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def format_wellness_entry(entries: dict[str, Any]) -> str:
+def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = None) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -253,60 +265,73 @@ def format_wellness_entry(entries: dict[str, Any]) -> str:
             - Nutrition: kcalConsumed, hydrationVolume, hydration
             - Activity: steps
             - Other: comments, locked, date
+        fields: Optional set of section names to include. If None or empty,
+            all sections are included. Valid values: "training", "sport_info",
+            "vital_signs", "sleep", "menstrual", "subjective", "nutrition",
+            "activity".
 
     Returns:
         A formatted string representation of the wellness entry.
     """
+    include_all = not fields
     lines = ["Wellness Data:"]
     lines.append(f"Date: {entries.get('id', 'N/A')}")
     lines.append("")
 
-    training_metrics = _format_training_metrics(entries)
-    if training_metrics:
-        lines.append("Training Metrics:")
-        lines.extend(training_metrics)
-        lines.append("")
+    if include_all or "training" in fields:  # type: ignore[operator]
+        training_metrics = _format_training_metrics(entries)
+        if training_metrics:
+            lines.append("Training Metrics:")
+            lines.extend(training_metrics)
+            lines.append("")
 
-    sport_info_list = _format_sport_info(entries)
-    if sport_info_list:
-        lines.append("Sport-Specific Info:")
-        lines.extend(sport_info_list)
-        lines.append("")
+    if include_all or "sport_info" in fields:  # type: ignore[operator]
+        sport_info_list = _format_sport_info(entries)
+        if sport_info_list:
+            lines.append("Sport-Specific Info:")
+            lines.extend(sport_info_list)
+            lines.append("")
 
-    vital_signs = _format_vital_signs(entries)
-    if vital_signs:
-        lines.append("Vital Signs:")
-        lines.extend(vital_signs)
-        lines.append("")
+    if include_all or "vital_signs" in fields:  # type: ignore[operator]
+        vital_signs = _format_vital_signs(entries)
+        if vital_signs:
+            lines.append("Vital Signs:")
+            lines.extend(vital_signs)
+            lines.append("")
 
-    sleep_lines = _format_sleep_recovery(entries)
-    if sleep_lines:
-        lines.append("Sleep & Recovery:")
-        lines.extend(sleep_lines)
-        lines.append("")
+    if include_all or "sleep" in fields:  # type: ignore[operator]
+        sleep_lines = _format_sleep_recovery(entries)
+        if sleep_lines:
+            lines.append("Sleep & Recovery:")
+            lines.extend(sleep_lines)
+            lines.append("")
 
-    menstrual_lines = _format_menstrual_tracking(entries)
-    if menstrual_lines:
-        lines.append("Menstrual Tracking:")
-        lines.extend(menstrual_lines)
-        lines.append("")
+    if include_all or "menstrual" in fields:  # type: ignore[operator]
+        menstrual_lines = _format_menstrual_tracking(entries)
+        if menstrual_lines:
+            lines.append("Menstrual Tracking:")
+            lines.extend(menstrual_lines)
+            lines.append("")
 
-    subjective_lines = _format_subjective_feelings(entries)
-    if subjective_lines:
-        lines.append("Subjective Feelings:")
-        lines.extend(subjective_lines)
-        lines.append("")
+    if include_all or "subjective" in fields:  # type: ignore[operator]
+        subjective_lines = _format_subjective_feelings(entries)
+        if subjective_lines:
+            lines.append("Subjective Feelings:")
+            lines.extend(subjective_lines)
+            lines.append("")
 
-    nutrition_lines = _format_nutrition_hydration(entries)
-    if nutrition_lines:
-        lines.append("Nutrition & Hydration:")
-        lines.extend(nutrition_lines)
-        lines.append("")
+    if include_all or "nutrition" in fields:  # type: ignore[operator]
+        nutrition_lines = _format_nutrition_hydration(entries)
+        if nutrition_lines:
+            lines.append("Nutrition & Hydration:")
+            lines.extend(nutrition_lines)
+            lines.append("")
 
-    if entries.get("steps") is not None:
-        lines.append("Activity:")
-        lines.append(f"- Steps: {entries['steps']}")
-        lines.append("")
+    if include_all or "activity" in fields:  # type: ignore[operator]
+        if entries.get("steps") is not None:
+            lines.append("Activity:")
+            lines.append(f"- Steps: {entries['steps']}")
+            lines.append("")
 
     if entries.get("comments"):
         lines.append(f"Comments: {entries['comments']}")
