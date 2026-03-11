@@ -7,6 +7,7 @@ These tests verify that the formatting functions produce expected output strings
 import json
 from intervals_mcp_server.utils.formatting import (
     WELLNESS_FIELDS,
+    format_activity_compact,
     format_activity_summary,
     format_workout,
     format_wellness_entry,
@@ -32,6 +33,57 @@ def test_format_activity_summary():
     result = format_activity_summary(data)
     assert "Activity: Morning Ride" in result
     assert "ID: 1" in result
+
+
+def test_format_activity_summary_omits_none_fields():
+    """
+    Test that format_activity_summary omits fields that have no data.
+    """
+    data = {
+        "name": "Indoor Swim",
+        "id": "s1",
+        "type": "Swim",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 2000,
+        "duration": 3600,
+        "average_heartrate": 140,
+        "max_heartrate": 165,
+        # These should NOT appear in output since they are None/absent
+        "icu_weighted_avg_watts": None,
+        "average_temp": None,
+        "power_meter": None,
+    }
+    result = format_activity_summary(data)
+    assert "Activity: Indoor Swim" in result
+    assert "Avg HR: 140 bpm" in result
+    # None fields should be omitted entirely
+    assert "Weighted" not in result
+    assert "Temp" not in result
+    assert "Power Meter" not in result
+    assert "N/A" not in result
+
+
+def test_format_activity_compact():
+    """
+    Test that format_activity_compact returns a concise single-line format.
+    """
+    data = {
+        "name": "Evening Run",
+        "id": "r1",
+        "type": "Run",
+        "startTime": "2024-03-15T18:00:00Z",
+        "distance": 10000,
+        "duration": 3000,
+        "trainingLoad": 65,
+        "average_heartrate": 155,
+    }
+    result = format_activity_compact(data)
+    assert "Run: Evening Run" in result
+    assert "10000m" in result
+    assert "TL:65" in result
+    assert "HR:155" in result
+    # Should be a single line
+    assert "\n" not in result
 
 
 def test_format_workout():
