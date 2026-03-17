@@ -85,6 +85,8 @@ def _ms_to_minkm_str(ms: float) -> str:
     Returns:
         Pace string in ``M:SS`` format (e.g. ``"4:35"``).
     """
+    if ms <= 0:
+        raise ValueError("Speed must be positive for pace conversion")
     secs_per_km = 1000.0 / ms
     minutes = int(secs_per_km // 60)
     seconds = int(round(secs_per_km % 60))
@@ -103,6 +105,8 @@ def _ms_to_sec100m(ms: float) -> float:
     Returns:
         Pace as seconds per 100 m, rounded to one decimal.
     """
+    if ms <= 0:
+        raise ValueError("Speed must be positive for pace conversion")
     return round(100.0 / ms, 1)
 
 
