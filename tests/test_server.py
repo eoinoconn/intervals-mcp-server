@@ -643,6 +643,7 @@ def test_get_athlete_zones_all_sports(monkeypatch):
 def test_get_athlete_zones_filter_by_sport(monkeypatch):
     """
     Test get_athlete_zones filters to a single sport when sport parameter is provided.
+    Pace zones for Run should be in min/km format.
     """
 
     async def fake_request(*_args, **_kwargs):
@@ -660,6 +661,12 @@ def test_get_athlete_zones_filter_by_sport(monkeypatch):
     assert "power_zones" in parsed[0]
     assert "hr_zones" in parsed[0]
     assert "pace_zones" in parsed[0]
+    # Run pace zones should use min/km keys
+    pz = parsed[0]["pace_zones"]
+    assert "min_minkm" in pz[0]  # Zone 1 has fast boundary
+    assert "max_minkm" not in pz[0]  # Zone 1 has no slow boundary
+    assert "min_minkm" in pz[1]  # Zone 2 has both
+    assert "max_minkm" in pz[1]
 
 
 def test_get_athlete_zones_filter_unknown_sport(monkeypatch):
@@ -682,6 +689,7 @@ def test_get_athlete_zones_omits_empty_zones(monkeypatch):
     """
     Test that zone types that are empty/not configured for a sport are omitted
     (e.g. no power zones or pace zones for Swim).
+    Swim pace zones should use sec/100m format.
     """
 
     async def fake_request(*_args, **_kwargs):
@@ -699,8 +707,13 @@ def test_get_athlete_zones_omits_empty_zones(monkeypatch):
     assert "power_zones" not in swim
     # Swim has HR zones
     assert "hr_zones" in swim
-    # Swim has pace zones
+    # Swim has pace zones in sec/100m
     assert "pace_zones" in swim
+    pz = swim["pace_zones"]
+    assert "min_sec100m" in pz[0]
+    assert "max_sec100m" not in pz[0]  # Zone 1 has no slow boundary
+    assert "min_sec100m" in pz[1]
+    assert "max_sec100m" in pz[1]
 
 
 def test_get_athlete_zones_ride_no_pace(monkeypatch):
@@ -752,7 +765,7 @@ def test_get_athlete_zones_power_zone_values(monkeypatch):
 
 def test_get_athlete_zones_thresholds(monkeypatch):
     """
-    Test that thresholds are correctly extracted.
+    Test that thresholds are correctly extracted, including converted pace values.
     """
 
     async def fake_request(*_args, **_kwargs):
@@ -771,6 +784,58 @@ def test_get_athlete_zones_thresholds(monkeypatch):
     assert run["thresholds"]["max_hr_bpm"] == 193
     assert run["thresholds"]["threshold_pace_ms"] == round(3.6363637, 2)
     assert run["thresholds"]["pace_units"] == "MINS_KM"
+    # Converted threshold pace: 1000/3.6363637 ≈ 275s = 4:35/km
+    assert run["thresholds"]["threshold_pace_minkm"] == "4:35"
+
+
+def test_get_athlete_zones_run_pace_values(monkeypatch):
+    """
+    Test that Run pace zones are correctly converted to min/km format.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Run"))
+
+    parsed = json.loads(result)
+    pz = parsed[0]["pace_zones"]
+    # Zone 1 (77.5%): speed=3.6363637*0.775=2.8182 m/s → 1000/2.8182≈354.9s → 5:55/km
+    assert pz[0]["name"] == "Zone 1"
+    assert pz[0]["min_minkm"] == "5:55"
+    assert "max_minkm" not in pz[0]
+    # Last zone (999%) should have no min (no fast boundary), only max (slow boundary)
+    assert "min_minkm" not in pz[-1]
+    assert "max_minkm" in pz[-1]
+
+
+def test_get_athlete_zones_swim_pace_values(monkeypatch):
+    """
+    Test that Swim pace zones are correctly converted to sec/100m format.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Swim"))
+
+    parsed = json.loads(result)
+    swim = parsed[0]
+    pz = swim["pace_zones"]
+    # Zone 1 (77.5%): speed=0.9009009*0.775=0.6982 m/s → 100/0.6982≈143.2 sec/100m
+    assert pz[0]["name"] == "Zone 1"
+    assert pz[0]["min_sec100m"] == 143.2
+    assert "max_sec100m" not in pz[0]
+    # Swim threshold pace in sec/100m: 100/0.9009009≈111.0
+    assert swim["thresholds"]["threshold_pace_sec100m"] == 111.0
 
 
 def test_get_athlete_zones_api_error(monkeypatch):

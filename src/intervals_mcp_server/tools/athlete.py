@@ -76,32 +76,93 @@ def _build_hr_zones(
     return zones
 
 
+def _ms_to_minkm_str(ms: float) -> str:
+    """Convert m/s speed to min/km pace formatted as ``M:SS``.
+
+    Args:
+        ms: Speed in metres per second (must be > 0).
+
+    Returns:
+        Pace string in ``M:SS`` format (e.g. ``"4:35"``).
+    """
+    secs_per_km = 1000.0 / ms
+    minutes = int(secs_per_km // 60)
+    seconds = int(round(secs_per_km % 60))
+    if seconds == 60:
+        minutes += 1
+        seconds = 0
+    return f"{minutes}:{seconds:02d}"
+
+
+def _ms_to_sec100m(ms: float) -> float:
+    """Convert m/s speed to seconds per 100 m.
+
+    Args:
+        ms: Speed in metres per second (must be > 0).
+
+    Returns:
+        Pace as seconds per 100 m, rounded to one decimal.
+    """
+    return round(100.0 / ms, 1)
+
+
 def _build_pace_zones(
     threshold_pace: float,
     zone_pcts: list[int | float],
     zone_names: list[str],
+    pace_units: str | None = None,
 ) -> list[dict[str, Any]]:
     """Build pace zone list from threshold pace and percentage boundaries.
+
+    When *pace_units* is ``"MINS_KM"`` or ``"SECS_100M"`` the boundaries are
+    converted to human-readable values.  Otherwise raw m/s values are used.
 
     Args:
         threshold_pace: Threshold pace in m/s.
         zone_pcts: Upper-boundary percentages of threshold pace for each zone.
         zone_names: Display names for each zone.
+        pace_units: Unit identifier from the Intervals.icu API (e.g.
+            ``"MINS_KM"``, ``"SECS_100M"``).  ``None`` keeps raw m/s.
 
     Returns:
-        List of zone dicts with name, min_ms, and (optionally) max_ms.
+        List of zone dicts with name and pace boundaries in the target unit.
     """
-    zones: list[dict[str, Any]] = []
-    prev_ms = 0.0
-    for i, name in enumerate(zone_names):
-        if i >= len(zone_pcts):
-            break
-        pct = zone_pcts[i]
-        zone: dict[str, Any] = {"name": name, "min_ms": prev_ms}
+    # Pre-compute speed boundaries (m/s) for every zone cutoff.
+    speed_bounds: list[float | None] = []
+    for pct in zone_pcts:
         if pct < _SENTINEL_PCT:
-            max_ms = round(threshold_pace * pct / 100, 2)
-            zone["max_ms"] = max_ms
-            prev_ms = round(max_ms + 0.01, 2)
+            speed_bounds.append(threshold_pace * pct / 100)
+        else:
+            speed_bounds.append(None)  # sentinel – no upper speed limit
+
+    zones: list[dict[str, Any]] = []
+    for i, name in enumerate(zone_names):
+        if i >= len(speed_bounds):
+            break
+
+        zone: dict[str, Any] = {"name": name}
+        fast_speed = speed_bounds[i]  # upper speed boundary (fast end)
+        slow_speed = speed_bounds[i - 1] if i > 0 else None  # previous zone boundary
+
+        if pace_units == "MINS_KM":
+            if fast_speed is not None:
+                zone["min_minkm"] = _ms_to_minkm_str(fast_speed)
+            if slow_speed is not None:
+                zone["max_minkm"] = _ms_to_minkm_str(slow_speed)
+        elif pace_units == "SECS_100M":
+            if fast_speed is not None:
+                zone["min_sec100m"] = _ms_to_sec100m(fast_speed)
+            if slow_speed is not None:
+                zone["max_sec100m"] = _ms_to_sec100m(slow_speed)
+        else:
+            # Fallback: raw m/s format
+            if slow_speed is not None:
+                zone["min_ms"] = round(slow_speed + 0.01, 2)
+            else:
+                zone["min_ms"] = 0.0
+            if fast_speed is not None:
+                zone["max_ms"] = round(fast_speed, 2)
+
         zones.append(zone)
     return zones
 
@@ -137,6 +198,10 @@ def _extract_sport_zones(setting: dict[str, Any]) -> dict[str, Any]:
         pace_units = setting.get("pace_units")
         if pace_units:
             thresholds["pace_units"] = pace_units
+            if pace_units == "MINS_KM":
+                thresholds["threshold_pace_minkm"] = _ms_to_minkm_str(threshold_pace)
+            elif pace_units == "SECS_100M":
+                thresholds["threshold_pace_sec100m"] = _ms_to_sec100m(threshold_pace)
     if thresholds:
         result["thresholds"] = thresholds
 
@@ -155,9 +220,10 @@ def _extract_sport_zones(setting: dict[str, Any]) -> dict[str, Any]:
     # Pace zones (require threshold pace and zone definitions)
     pace_zones_pcts = setting.get("pace_zones")
     pace_zone_names = setting.get("pace_zone_names")
+    pace_units = setting.get("pace_units")
     if threshold_pace and pace_zones_pcts and pace_zone_names:
         result["pace_zones"] = _build_pace_zones(
-            threshold_pace, pace_zones_pcts, pace_zone_names
+            threshold_pace, pace_zones_pcts, pace_zone_names, pace_units
         )
 
     return result
