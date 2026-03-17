@@ -118,6 +118,7 @@ SPORT_SETTINGS_DATA: list[dict] = [
         "pace_units": None,
         "pace_zones": None,
         "pace_zone_names": None,
+        "updated": "2026-03-07T21:52:28.685+00:00",
     },
     {
         "id": 2,
@@ -146,6 +147,7 @@ SPORT_SETTINGS_DATA: list[dict] = [
             "Aerobic Capacity",
             "Anaerobic",
         ],
+        "updated": "2026-03-07T21:47:41.692+00:00",
         "threshold_pace": 3.6363637,
         "pace_units": "MINS_KM",
         "pace_zones": [77.5, 87.7, 94.3, 100, 103.4, 111.5, 999],
@@ -178,6 +180,7 @@ SPORT_SETTINGS_DATA: list[dict] = [
             "Aerobic Capacity",
             "Anaerobic",
         ],
+        "updated": "2026-03-10T10:15:00.000+00:00",
         "threshold_pace": 0.9009009,
         "pace_units": "SECS_100M",
         "pace_zones": [77.5, 87.7, 94.3, 100, 103.4, 111.5, 999],

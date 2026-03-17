@@ -185,6 +185,10 @@ def _extract_sport_zones(setting: dict[str, Any]) -> dict[str, Any]:
 
     result: dict[str, Any] = {"sport": sport, "types": types}
 
+    updated = setting.get("updated")
+    if updated is not None:
+        result["last_updated"] = updated
+
     # Thresholds
     thresholds: dict[str, Any] = {}
     ftp = setting.get("ftp")

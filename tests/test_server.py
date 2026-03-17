@@ -638,6 +638,9 @@ def test_get_athlete_zones_all_sports(monkeypatch):
     assert "Ride" in sports
     assert "Run" in sports
     assert "Swim" in sports
+    # All sports should have last_updated
+    for z in parsed:
+        assert "last_updated" in z
 
 
 def test_get_athlete_zones_filter_by_sport(monkeypatch):
@@ -786,6 +789,7 @@ def test_get_athlete_zones_thresholds(monkeypatch):
     assert run["thresholds"]["pace_units"] == "MINS_KM"
     # Converted threshold pace: 1000/3.6363637 ≈ 275s = 4:35/km
     assert run["thresholds"]["threshold_pace_minkm"] == "4:35"
+    assert run["last_updated"] == "2026-03-07T21:47:41.692+00:00"
 
 
 def test_get_athlete_zones_run_pace_values(monkeypatch):
