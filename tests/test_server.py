@@ -32,13 +32,14 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_activity_streams,
     add_or_update_event,
     get_athlete_power_curves,
+    get_athlete_zones,
     get_custom_items,
     get_custom_item_by_id,
     create_custom_item,
     update_custom_item,
     delete_custom_item,
 )
-from tests.sample_data import INTERVALS_DATA, POWER_CURVES_DATA  # pylint: disable=wrong-import-position
+from tests.sample_data import INTERVALS_DATA, POWER_CURVES_DATA, SPORT_SETTINGS_DATA  # pylint: disable=wrong-import-position
 
 
 def test_get_activities(monkeypatch):
@@ -614,3 +615,200 @@ def test_create_custom_item_with_invalid_json_content(monkeypatch):
         )
     )
     assert "Error: content must be valid JSON when passed as a string." in result
+
+
+def test_get_athlete_zones_all_sports(monkeypatch):
+    """
+    Test get_athlete_zones returns zones for all sports when no sport filter is given.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1"))
+    import json
+
+    parsed = json.loads(result)
+    assert len(parsed) == 3
+    sports = [z["sport"] for z in parsed]
+    assert "Ride" in sports
+    assert "Run" in sports
+    assert "Swim" in sports
+
+
+def test_get_athlete_zones_filter_by_sport(monkeypatch):
+    """
+    Test get_athlete_zones filters to a single sport when sport parameter is provided.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Run"))
+    import json
+
+    parsed = json.loads(result)
+    assert len(parsed) == 1
+    assert parsed[0]["sport"] == "Run"
+    assert "power_zones" in parsed[0]
+    assert "hr_zones" in parsed[0]
+    assert "pace_zones" in parsed[0]
+
+
+def test_get_athlete_zones_filter_unknown_sport(monkeypatch):
+    """
+    Test get_athlete_zones returns error message when filtering by a non-existent sport.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Ski"))
+    assert "No zone settings found for sport 'Ski'" in result
+
+
+def test_get_athlete_zones_omits_empty_zones(monkeypatch):
+    """
+    Test that zone types that are empty/not configured for a sport are omitted
+    (e.g. no power zones or pace zones for Swim).
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Swim"))
+    import json
+
+    parsed = json.loads(result)
+    swim = parsed[0]
+    # Swim has no FTP, so no power zones
+    assert "power_zones" not in swim
+    # Swim has HR zones
+    assert "hr_zones" in swim
+    # Swim has pace zones
+    assert "pace_zones" in swim
+
+
+def test_get_athlete_zones_ride_no_pace(monkeypatch):
+    """
+    Test that Ride has no pace zones (threshold_pace is null for Ride).
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Ride"))
+    import json
+
+    parsed = json.loads(result)
+    ride = parsed[0]
+    assert "power_zones" in ride
+    assert "hr_zones" in ride
+    assert "pace_zones" not in ride
+
+
+def test_get_athlete_zones_power_zone_values(monkeypatch):
+    """
+    Test that power zone watt values are correctly computed from FTP and percentages.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Ride"))
+    import json
+
+    parsed = json.loads(result)
+    ride = parsed[0]
+    pz = ride["power_zones"]
+    # FTP=261, first zone upper = 55% of 261 = 143.55 → round to 144
+    assert pz[0]["name"] == "Active Recovery"
+    assert pz[0]["min_w"] == 0
+    assert pz[0]["max_w"] == round(261 * 55 / 100)
+    # Last zone (Neuromuscular, 999%) should have no max_w
+    assert pz[-1]["name"] == "Neuromuscular"
+    assert "max_w" not in pz[-1]
+
+
+def test_get_athlete_zones_thresholds(monkeypatch):
+    """
+    Test that thresholds are correctly extracted.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return SPORT_SETTINGS_DATA
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Run"))
+    import json
+
+    parsed = json.loads(result)
+    run = parsed[0]
+    assert run["thresholds"]["ftp_w"] == 455
+    assert run["thresholds"]["lthr_bpm"] == 181
+    assert run["thresholds"]["max_hr_bpm"] == 193
+    assert run["thresholds"]["threshold_pace_ms"] == round(3.6363637, 2)
+    assert run["thresholds"]["pace_units"] == "MINS_KM"
+
+
+def test_get_athlete_zones_api_error(monkeypatch):
+    """
+    Test get_athlete_zones handles API errors gracefully.
+    """
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Unauthorized"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_athlete_zones(athlete_id="i1"))
+    assert "Error fetching athlete zones" in result
+    assert "Unauthorized" in result
+
+
+def test_get_athlete_zones_no_athlete_id(monkeypatch):
+    """
+    Test get_athlete_zones returns error when no athlete ID is available.
+    """
+    from intervals_mcp_server import config as config_module
+
+    original = config_module._config_instance
+    monkeypatch.setattr(config_module, "_config_instance", None)
+    monkeypatch.setenv("ATHLETE_ID", "")
+    monkeypatch.setenv("API_KEY", "test")
+    config_module._config_instance = config_module.load_config()
+
+    try:
+        result = asyncio.run(get_athlete_zones(athlete_id=None))
+        assert "Error" in result or "No athlete ID" in result
+    finally:
+        config_module._config_instance = original
