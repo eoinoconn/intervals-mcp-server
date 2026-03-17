@@ -14,6 +14,7 @@ The tests ensure that the server's public API returns expected strings and handl
 """
 
 import asyncio
+import json
 import os
 import pathlib
 import sys
@@ -630,7 +631,6 @@ def test_get_athlete_zones_all_sports(monkeypatch):
         "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
     )
     result = asyncio.run(get_athlete_zones(athlete_id="i1"))
-    import json
 
     parsed = json.loads(result)
     assert len(parsed) == 3
@@ -653,7 +653,6 @@ def test_get_athlete_zones_filter_by_sport(monkeypatch):
         "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
     )
     result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Run"))
-    import json
 
     parsed = json.loads(result)
     assert len(parsed) == 1
@@ -693,7 +692,6 @@ def test_get_athlete_zones_omits_empty_zones(monkeypatch):
         "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
     )
     result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Swim"))
-    import json
 
     parsed = json.loads(result)
     swim = parsed[0]
@@ -718,7 +716,6 @@ def test_get_athlete_zones_ride_no_pace(monkeypatch):
         "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
     )
     result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Ride"))
-    import json
 
     parsed = json.loads(result)
     ride = parsed[0]
@@ -740,7 +737,6 @@ def test_get_athlete_zones_power_zone_values(monkeypatch):
         "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
     )
     result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Ride"))
-    import json
 
     parsed = json.loads(result)
     ride = parsed[0]
@@ -767,7 +763,6 @@ def test_get_athlete_zones_thresholds(monkeypatch):
         "intervals_mcp_server.tools.athlete.make_intervals_request", fake_request
     )
     result = asyncio.run(get_athlete_zones(athlete_id="i1", sport="Run"))
-    import json
 
     parsed = json.loads(result)
     run = parsed[0]
