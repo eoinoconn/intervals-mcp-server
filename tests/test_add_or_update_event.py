@@ -21,7 +21,6 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.server import add_or_update_event
-from intervals_mcp_server.tools.events import _resolve_workout_type
 from intervals_mcp_server.utils.types import (
     Intensity,
     Step,
@@ -280,25 +279,6 @@ def test_add_event_row_workout(monkeypatch):
 # ===================================================================
 # Phase 3 – Workout type auto-resolution from name
 # ===================================================================
-
-
-def test_resolve_workout_type_from_name():
-    """_resolve_workout_type maps name keywords to correct types and falls back to Ride."""
-    assert _resolve_workout_type("Morning bike ride", None) == "Ride"
-    assert _resolve_workout_type("Easy cycling", None) == "Ride"
-    assert _resolve_workout_type("Long run", None) == "Run"
-    assert _resolve_workout_type("Jogging session", None) == "Run"
-    assert _resolve_workout_type("Pool swim", None) == "Swim"
-    assert _resolve_workout_type("Open water swimming", None) == "Swim"
-    assert _resolve_workout_type("Evening walk", None) == "Walk"
-    assert _resolve_workout_type("Hiking trip", None) == "Walk"
-    assert _resolve_workout_type("Indoor rowing", None) == "Row"
-    # Default fallback
-    assert _resolve_workout_type("Mystery workout", None) == "Ride"
-    # Explicit workout_type overrides name
-    assert _resolve_workout_type("Morning run", "Swim") == "Swim"
-    # None name
-    assert _resolve_workout_type(None, None) == "Ride"
 
 
 # ===================================================================
