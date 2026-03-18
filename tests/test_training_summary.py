@@ -139,7 +139,7 @@ SAMPLE_SUMMARY_WEEKS = [
 ]
 
 
-SAMPLE_EVENTS = [
+SAMPLE_ACTIVITIES = [
     {
         "start_date_local": "2026-02-17T08:00:00",
         "compliance": 92,
@@ -243,13 +243,13 @@ def test_build_by_sport_no_eftp_when_null():
 
 def test_compute_weekly_compliance():
     """Average compliance across activities with non-null compliance."""
-    compliance = _compute_weekly_compliance(SAMPLE_EVENTS, "2026-02-16", "2026-02-22")
+    compliance = _compute_weekly_compliance(SAMPLE_ACTIVITIES, "2026-02-16", "2026-02-22")
     assert compliance == 86  # (92 + 80) / 2 = 86
 
 
 def test_compute_weekly_compliance_none_when_no_linked():
     """Weeks where no activities have compliance should return None."""
-    compliance = _compute_weekly_compliance(SAMPLE_EVENTS, "2026-02-23", "2026-03-01")
+    compliance = _compute_weekly_compliance(SAMPLE_ACTIVITIES, "2026-02-23", "2026-03-01")
     assert compliance is None
 
 
@@ -283,13 +283,13 @@ def test_build_period_totals():
 # ---------------------------------------------------------------------------
 
 
-def _make_fake_request(summary_response, events_response, wellness_response):
+def _make_fake_request(summary_response, activities_response, wellness_response):
     """Create a fake make_intervals_request that routes based on URL."""
     async def fake_request(url="", **kwargs):
         if "athlete-summary" in url:
             return summary_response
-        if "events" in url:
-            return events_response
+        if "activities" in url:
+            return activities_response
         if "wellness" in url:
             return wellness_response
         return {"error": True, "message": "unexpected URL"}
@@ -300,7 +300,7 @@ def test_get_training_summary_integration(monkeypatch):
     """Full integration test with mocked API calls."""
     # API returns reverse-chronological
     reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
-    fake = _make_fake_request(reversed_weeks, SAMPLE_EVENTS, SAMPLE_WELLNESS)
+    fake = _make_fake_request(reversed_weeks, SAMPLE_ACTIVITIES, SAMPLE_WELLNESS)
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
     monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
@@ -470,7 +470,7 @@ def test_get_training_summary_concurrent_calls(monkeypatch):
         call_urls.append(url)
         if "athlete-summary" in url:
             return []
-        if "events" in url:
+        if "activities" in url:
             return []
         if "wellness" in url:
             return []
@@ -485,7 +485,7 @@ def test_get_training_summary_concurrent_calls(monkeypatch):
 
     assert len(call_urls) == 3
     assert any("athlete-summary" in u for u in call_urls)
-    assert any("events" in u for u in call_urls)
+    assert any("activities" in u for u in call_urls)
     assert any("wellness" in u for u in call_urls)
 
 
@@ -508,7 +508,7 @@ def test_get_training_summary_ac_ratio(monkeypatch):
 def test_get_training_summary_wellness_in_weeks(monkeypatch):
     """Wellness metrics should be averaged per calendar week."""
     reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
-    fake = _make_fake_request(reversed_weeks, SAMPLE_EVENTS, SAMPLE_WELLNESS)
+    fake = _make_fake_request(reversed_weeks, SAMPLE_ACTIVITIES, SAMPLE_WELLNESS)
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
     monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
@@ -525,9 +525,9 @@ def test_get_training_summary_wellness_in_weeks(monkeypatch):
 
 
 def test_get_training_summary_compliance_in_weeks(monkeypatch):
-    """Compliance should be computed per week from events."""
+    """Compliance should be computed per week from activities."""
     reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
-    fake = _make_fake_request(reversed_weeks, SAMPLE_EVENTS, SAMPLE_WELLNESS)
+    fake = _make_fake_request(reversed_weeks, SAMPLE_ACTIVITIES, SAMPLE_WELLNESS)
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
     monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
@@ -537,7 +537,7 @@ def test_get_training_summary_compliance_in_weeks(monkeypatch):
     )
     result = json.loads(result_str)
 
-    # First week should have compliance from events on 2026-02-17 and 2026-02-18
+    # First week should have compliance from activities on 2026-02-17 and 2026-02-18
     week0 = result["weeks"][0]
     assert week0.get("compliance_pct") == 86  # (92+80)/2
 

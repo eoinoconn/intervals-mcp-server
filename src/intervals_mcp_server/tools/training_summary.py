@@ -3,7 +3,7 @@ Training summary MCP tool for Intervals.icu.
 
 This module provides a compact, coaching-ready training snapshot for a given
 date range by aggregating data from three concurrent API calls:
-athlete-summary, events, and wellness.
+athlete-summary, activities, and wellness.
 """
 
 import asyncio
@@ -159,7 +159,7 @@ def _build_period_totals(
 
 
 def _compute_weekly_compliance(
-    events: list[dict[str, Any]],
+    activities: list[dict[str, Any]],
     week_start: str,
     week_end: str,
 ) -> int | None:
@@ -168,17 +168,17 @@ def _compute_weekly_compliance(
     we = datetime.strptime(week_end, "%Y-%m-%d").date()
 
     compliance_values: list[float] = []
-    for ev in events:
-        # Events have start_date_local like "2026-03-09T00:00:00"
-        date_str = ev.get("start_date_local", "")
+    for act in activities:
+        # Activities have start_date_local like "2026-03-09T08:00:00"
+        date_str = act.get("start_date_local", "")
         if not date_str:
             continue
         try:
-            ev_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+            act_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
         except (ValueError, TypeError):
             continue
-        if ws <= ev_date <= we:
-            comp = ev.get("compliance")
+        if ws <= act_date <= we:
+            comp = act.get("compliance")
             if comp is not None:
                 try:
                     compliance_values.append(float(comp))
@@ -242,7 +242,7 @@ def _compute_weekly_wellness(
 
 def _build_weeks(
     summary_weeks: list[dict[str, Any]],
-    events: list[dict[str, Any]],
+    activities: list[dict[str, Any]],
     wellness_data: list[dict[str, Any]],
     today: datetime,
 ) -> list[dict[str, Any]]:
@@ -276,8 +276,8 @@ def _build_weeks(
             "tsb": _round1(w.get("form")),
         }
 
-        # Compliance
-        compliance = _compute_weekly_compliance(events, week_start, week_end)
+        # Compliance (from activities, not events)
+        compliance = _compute_weekly_compliance(activities, week_start, week_end)
         if compliance is not None:
             week["compliance_pct"] = compliance
 
@@ -300,7 +300,7 @@ def _build_weeks(
 
 def _build_result(
     summary_weeks: list[dict[str, Any]],
-    events: list[dict[str, Any]],
+    activities: list[dict[str, Any]],
     wellness_data: list[dict[str, Any]],
     start_date: str,
     end_date: str,
@@ -336,7 +336,7 @@ def _build_result(
         "period": {"start": start_date, "end": end_date},
         "load": _strip_nulls(load),
         "period_totals": _build_period_totals(summary_weeks),
-        "weeks": _build_weeks(summary_weeks, events, wellness_data, today),
+        "weeks": _build_weeks(summary_weeks, activities, wellness_data, today),
     }
 
     return _strip_nulls(result)
@@ -381,8 +381,8 @@ async def get_training_summary(
         api_key=api_key,
         params={"start": start_date, "end": end_date},
     )
-    events_coro = make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events",
+    activities_coro = make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/activities",
         api_key=api_key,
         params={"oldest": start_date, "newest": end_date},
     )
@@ -392,12 +392,12 @@ async def get_training_summary(
         params={"oldest": start_date, "newest": end_date},
     )
 
-    summary_raw, events_raw, wellness_raw = await asyncio.gather(
-        summary_coro, events_coro, wellness_coro
+    summary_raw, activities_raw, wellness_raw = await asyncio.gather(
+        summary_coro, activities_coro, wellness_coro
     )
 
     # Handle errors from any of the calls
-    for label, raw in [("athlete-summary", summary_raw), ("events", events_raw),
+    for label, raw in [("athlete-summary", summary_raw), ("activities", activities_raw),
                        ("wellness", wellness_raw)]:
         if isinstance(raw, dict) and "error" in raw:
             return f"Error fetching {label}: {raw.get('message', 'Unknown error')}"
@@ -406,8 +406,8 @@ async def get_training_summary(
     summary_weeks: list[dict[str, Any]] = (
         summary_raw if isinstance(summary_raw, list) else []
     )
-    events_list: list[dict[str, Any]] = (
-        events_raw if isinstance(events_raw, list) else []
+    activities_list: list[dict[str, Any]] = (
+        activities_raw if isinstance(activities_raw, list) else []
     )
     wellness_list: list[dict[str, Any]] = (
         wellness_raw if isinstance(wellness_raw, list) else []
@@ -417,7 +417,7 @@ async def get_training_summary(
     summary_weeks.reverse()
 
     today = datetime.now()
-    result = _build_result(summary_weeks, events_list, wellness_list,
+    result = _build_result(summary_weeks, activities_list, wellness_list,
                            start_date, end_date, today)
 
     return json.dumps(result, separators=(",", ":"))
