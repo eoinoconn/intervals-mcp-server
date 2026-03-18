@@ -45,18 +45,15 @@ def _strip_nulls(d: dict[str, Any], keep_zero_keys: set[str] | None = None) -> d
     """Remove keys whose values are None or empty collections.
 
     Keys listed in *keep_zero_keys* are preserved even when their value is 0.
+    All other zero values are also preserved — only None and empty
+    collections are stripped.
     """
-    keep_zero = keep_zero_keys or set()
     out: dict[str, Any] = {}
     for k, v in d.items():
         if v is None:
             continue
         if isinstance(v, (list, dict)) and not v:
             continue
-        if v == 0 and k not in keep_zero:
-            # Keep 0 values – they are meaningful (e.g. sessions=0 shouldn't happen
-            # but tss=0 is load-bearing). Only None/empty are dropped.
-            pass
         out[k] = v
     return out
 
