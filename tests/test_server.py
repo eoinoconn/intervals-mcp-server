@@ -105,8 +105,8 @@ def test_get_activity_details_with_compliance(monkeypatch):
         "startTime": "2024-06-01T07:00:00Z",
         "distance": 40000,
         "duration": 5400,
-        "pairedEventId": 789,
-        "compliance": 0.92,
+        "paired_event_id": 789,
+        "compliance": 92.0,
     }
 
     async def fake_request(*_args, **_kwargs):
@@ -119,7 +119,7 @@ def test_get_activity_details_with_compliance(monkeypatch):
     result = asyncio.run(get_activity_details(456))
     assert "Workout Compliance:" in result
     assert "Paired Event ID: 789" in result
-    assert "Compliance: 92%" in result
+    assert "Compliance: 92.00%" in result
 
 
 def test_get_events(monkeypatch):

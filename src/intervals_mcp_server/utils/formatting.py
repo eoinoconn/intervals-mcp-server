@@ -143,10 +143,10 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
 
     # Workout compliance - only if activity is paired with a workout
     compliance_lines: list[str] = []
-    _add_field(compliance_lines, "Paired Event ID", activity.get("pairedEventId"))
+    _add_field(compliance_lines, "Paired Event ID", activity.get("paired_event_id"))
     compliance = activity.get("compliance")
     if compliance is not None:
-        _add_field(compliance_lines, "Compliance", f"{compliance:.0%}")
+        _add_field(compliance_lines, "Compliance", f"{compliance:.2f}%")
     _add_section(lines, "  Workout Compliance:", compliance_lines)
 
     # Device - only if present

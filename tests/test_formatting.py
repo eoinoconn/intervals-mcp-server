@@ -75,13 +75,13 @@ def test_format_activity_summary_with_compliance():
         "startTime": "2024-06-01T07:00:00Z",
         "distance": 40000,
         "duration": 5400,
-        "pairedEventId": 12345,
-        "compliance": 0.85,
+        "paired_event_id": 12345,
+        "compliance": 85.0,
     }
     result = format_activity_summary(data)
     assert "Workout Compliance:" in result
     assert "Paired Event ID: 12345" in result
-    assert "Compliance: 85%" in result
+    assert "Compliance: 85.00%" in result
 
 
 def test_format_activity_summary_omits_compliance_when_absent():
