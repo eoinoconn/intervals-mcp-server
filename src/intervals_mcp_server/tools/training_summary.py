@@ -13,7 +13,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import strip_nulls
+from intervals_mcp_server.utils.formatting import set_if, strip_nulls
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params, validate_date
 
 # Import mcp instance from shared module for tool registration
@@ -56,19 +56,10 @@ def _build_by_sport(
             "tss": _round1(cat.get("training_load")),
             "duration_secs": cat.get("time", 0),
         }
-        dist = cat.get("distance")
-        if dist is not None and dist > 0:
-            sport["distance_m"] = _round1(dist)
-        elev = cat.get("total_elevation_gain")
-        if elev is not None and elev > 0:
-            sport["elevation_m"] = _round1(elev)
-
-        eftp = _round1(cat.get("eftp"))
-        if eftp is not None:
-            sport["eftp_w"] = eftp
-        eftp_kg = _round1(cat.get("eftpPerKg"))
-        if eftp_kg is not None:
-            sport["eftp_w_kg"] = eftp_kg
+        set_if(sport, "distance_m", cat.get("distance"), positive=True, transform=_round1)
+        set_if(sport, "elevation_m", cat.get("total_elevation_gain"), positive=True, transform=_round1)
+        set_if(sport, "eftp_w", cat.get("eftp"), transform=_round1)
+        set_if(sport, "eftp_w_kg", cat.get("eftpPerKg"), transform=_round1)
 
         result[name] = strip_nulls(sport)
     return result
@@ -113,10 +104,8 @@ def _build_period_totals(
             "tss": _round1(agg["tss"]),
             "duration_secs": int(agg["duration_secs"]),
         }
-        if agg["distance_m"] > 0:
-            sport["distance_m"] = _round1(agg["distance_m"])
-        if agg["elevation_m"] > 0:
-            sport["elevation_m"] = _round1(agg["elevation_m"])
+        set_if(sport, "distance_m", agg["distance_m"], positive=True, transform=_round1)
+        set_if(sport, "elevation_m", agg["elevation_m"], positive=True, transform=_round1)
         by_sport[name] = strip_nulls(sport)
 
     totals: dict[str, Any] = {
@@ -125,10 +114,8 @@ def _build_period_totals(
         "tss": _round1(tss),
         "srpe": _round1(srpe),
     }
-    if distance > 0:
-        totals["distance_m"] = _round1(distance)
-    if elevation > 0:
-        totals["elevation_m"] = _round1(elevation)
+    set_if(totals, "distance_m", distance, positive=True, transform=_round1)
+    set_if(totals, "elevation_m", elevation, positive=True, transform=_round1)
     if by_sport:
         totals["by_sport"] = by_sport
     return strip_nulls(totals)

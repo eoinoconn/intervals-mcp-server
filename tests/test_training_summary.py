@@ -22,7 +22,7 @@ from intervals_mcp_server.tools.training_summary import (  # noqa: E402
     _round1,
     _round2,
 )
-from intervals_mcp_server.utils.formatting import strip_nulls  # noqa: E402
+from intervals_mcp_server.utils.formatting import set_if, strip_nulls  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +194,60 @@ def test_strip_nulls_preserves_zeros():
     d = {"tss": 0, "count": 0, "other": None}
     result = strip_nulls(d)
     assert result == {"tss": 0, "count": 0}
+
+
+def test_set_if_sets_when_not_none():
+    d: dict = {}
+    set_if(d, "a", 42)
+    assert d == {"a": 42}
+
+
+def test_set_if_skips_none():
+    d: dict = {}
+    set_if(d, "a", None)
+    assert d == {}
+
+
+def test_set_if_positive_sets_when_positive():
+    d: dict = {}
+    set_if(d, "x", 5, positive=True)
+    assert d == {"x": 5}
+
+
+def test_set_if_positive_skips_zero():
+    d: dict = {}
+    set_if(d, "x", 0, positive=True)
+    assert d == {}
+
+
+def test_set_if_positive_skips_negative():
+    d: dict = {}
+    set_if(d, "x", -1, positive=True)
+    assert d == {}
+
+
+def test_set_if_with_transform():
+    d: dict = {}
+    set_if(d, "val", 3.456, transform=lambda v: round(v, 1))
+    assert d == {"val": 3.5}
+
+
+def test_set_if_transform_returning_none_skips():
+    d: dict = {}
+    set_if(d, "val", "bad", transform=lambda v: None)
+    assert d == {}
+
+
+def test_set_if_preserves_zero_without_positive_flag():
+    d: dict = {}
+    set_if(d, "count", 0)
+    assert d == {"count": 0}
+
+
+def test_set_if_with_string_value():
+    d: dict = {}
+    set_if(d, "name", "Ride")
+    assert d == {"name": "Ride"}
 
 
 def test_build_by_sport_zero_tss_preserved():
