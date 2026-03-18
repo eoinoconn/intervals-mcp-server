@@ -21,8 +21,8 @@ from intervals_mcp_server.tools.training_summary import (  # noqa: E402
     _compute_weekly_wellness,
     _round1,
     _round2,
-    _strip_nulls,
 )
+from intervals_mcp_server.utils.formatting import strip_nulls  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -186,13 +186,13 @@ def test_round2_basic():
 
 def test_strip_nulls_removes_none_and_empty():
     d = {"a": 1, "b": None, "c": [], "d": {}, "e": 0, "f": "hello"}
-    result = _strip_nulls(d)
+    result = strip_nulls(d)
     assert result == {"a": 1, "e": 0, "f": "hello"}
 
 
-def test_strip_nulls_keep_zero_keys():
+def test_strip_nulls_preserves_zeros():
     d = {"tss": 0, "count": 0, "other": None}
-    result = _strip_nulls(d, keep_zero_keys={"tss", "count"})
+    result = strip_nulls(d)
     assert result == {"tss": 0, "count": 0}
 
 

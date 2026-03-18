@@ -8,6 +8,23 @@ import json
 from datetime import datetime
 from typing import Any
 
+
+def strip_nulls(d: dict[str, Any]) -> dict[str, Any]:
+    """Remove keys whose values are None or empty collections.
+
+    Zero values are preserved — only ``None`` and empty lists/dicts are
+    stripped.
+    """
+    out: dict[str, Any] = {}
+    for k, v in d.items():
+        if v is None:
+            continue
+        if isinstance(v, (list, dict)) and not v:
+            continue
+        out[k] = v
+    return out
+
+
 # Valid field names for wellness entry filtering
 WELLNESS_FIELDS: set[str] = {
     "training",

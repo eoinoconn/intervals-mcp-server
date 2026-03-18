@@ -13,6 +13,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.utils.formatting import strip_nulls
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params, validate_date
 
 # Import mcp instance from shared module for tool registration
@@ -41,26 +42,8 @@ def _round2(value: Any) -> float | None:
         return None
 
 
-def _strip_nulls(d: dict[str, Any], keep_zero_keys: set[str] | None = None) -> dict[str, Any]:
-    """Remove keys whose values are None or empty collections.
-
-    Keys listed in *keep_zero_keys* are preserved even when their value is 0.
-    All other zero values are also preserved — only None and empty
-    collections are stripped.
-    """
-    out: dict[str, Any] = {}
-    for k, v in d.items():
-        if v is None:
-            continue
-        if isinstance(v, (list, dict)) and not v:
-            continue
-        out[k] = v
-    return out
-
-
 def _build_by_sport(
     categories: list[dict[str, Any]],
-    keep_tss_zero: bool = True,
 ) -> dict[str, dict[str, Any]]:
     """Build a by_sport dict from the byCategory list of an athlete-summary week."""
     result: dict[str, dict[str, Any]] = {}
@@ -87,14 +70,7 @@ def _build_by_sport(
         if eftp_kg is not None:
             sport["eftp_w_kg"] = eftp_kg
 
-        # Determine which keys to preserve at zero
-        zero_keys: set[str] = set()
-        if keep_tss_zero:
-            zero_keys.add("tss")
-        # Always keep count and duration_secs
-        zero_keys.update({"count", "duration_secs"})
-
-        result[name] = _strip_nulls(sport, keep_zero_keys=zero_keys)
+        result[name] = strip_nulls(sport)
     return result
 
 
@@ -141,7 +117,7 @@ def _build_period_totals(
             sport["distance_m"] = _round1(agg["distance_m"])
         if agg["elevation_m"] > 0:
             sport["elevation_m"] = _round1(agg["elevation_m"])
-        by_sport[name] = _strip_nulls(sport, keep_zero_keys={"tss", "count", "duration_secs"})
+        by_sport[name] = strip_nulls(sport)
 
     totals: dict[str, Any] = {
         "sessions": sessions,
@@ -155,7 +131,7 @@ def _build_period_totals(
         totals["elevation_m"] = _round1(elevation)
     if by_sport:
         totals["by_sport"] = by_sport
-    return _strip_nulls(totals, keep_zero_keys={"sessions", "duration_secs", "tss"})
+    return strip_nulls(totals)
 
 
 def _compute_weekly_compliance(
@@ -291,9 +267,8 @@ def _build_weeks(
         if wellness:
             week["wellness"] = wellness
 
-        # Strip nulls but keep tss at zero (and certain other keys)
-        keep_zero = {"tss", "sessions", "duration_secs"}
-        result.append(_strip_nulls(week, keep_zero_keys=keep_zero))
+        # Strip nulls
+        result.append(strip_nulls(week))
 
     return result
 
@@ -326,20 +301,20 @@ def _build_result(
         ac_ratio = _round2(current_atl / current_ctl)
 
     load: dict[str, Any] = {
-        "start": _strip_nulls({"ctl": start_ctl, "atl": start_atl, "tsb": start_tsb}),
-        "current": _strip_nulls({"ctl": current_ctl, "atl": current_atl, "tsb": current_tsb}),
+        "start": strip_nulls({"ctl": start_ctl, "atl": start_atl, "tsb": start_tsb}),
+        "current": strip_nulls({"ctl": current_ctl, "atl": current_atl, "tsb": current_tsb}),
     }
     if ac_ratio is not None:
         load["ac_ratio"] = ac_ratio
 
     result: dict[str, Any] = {
         "period": {"start": start_date, "end": end_date},
-        "load": _strip_nulls(load),
+        "load": strip_nulls(load),
         "period_totals": _build_period_totals(summary_weeks),
         "weeks": _build_weeks(summary_weeks, activities, wellness_data, today),
     }
 
-    return _strip_nulls(result)
+    return strip_nulls(result)
 
 
 @mcp.tool()
