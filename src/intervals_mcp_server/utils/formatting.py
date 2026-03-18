@@ -5,8 +5,51 @@ This module contains formatting functions for handling data from the Intervals.i
 """
 
 import json
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
+
+
+def strip_nulls(d: dict[str, Any]) -> dict[str, Any]:
+    """Remove keys whose values are None or empty collections.
+
+    Zero values are preserved — only ``None`` and empty lists/dicts are
+    stripped.
+    """
+    out: dict[str, Any] = {}
+    for k, v in d.items():
+        if v is None:
+            continue
+        if isinstance(v, (list, dict)) and not v:
+            continue
+        out[k] = v
+    return out
+
+
+def set_if(
+    target: dict[str, Any],
+    key: str,
+    value: Any,
+    *,
+    positive: bool = False,
+    transform: Callable[[Any], Any] | None = None,
+) -> None:
+    """Conditionally set ``target[key]`` based on *value*.
+
+    By default the key is set when *value* is not ``None``.  With
+    ``positive=True`` the value must also satisfy ``> 0``.
+
+    *transform* is applied before storing; if the result is ``None``
+    the key is not set.
+    """
+    if value is None:
+        return
+    if positive and not (value > 0):
+        return
+    result = transform(value) if transform else value
+    if result is not None:
+        target[key] = result
+
 
 # Valid field names for wellness entry filtering
 WELLNESS_FIELDS: set[str] = {
