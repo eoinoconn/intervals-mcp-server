@@ -184,6 +184,14 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     _add_field(load_lines, "EF", activity.get("icu_efficiency_factor"))
     _add_section(lines, "  Load:", load_lines)
 
+    # Workout compliance - only if activity is paired with a workout
+    compliance_lines: list[str] = []
+    _add_field(compliance_lines, "Paired Event ID", activity.get("paired_event_id"))
+    compliance = activity.get("compliance")
+    if compliance is not None:
+        _add_field(compliance_lines, "Compliance", f"{compliance:.2f}%")
+    _add_section(lines, "  Workout Compliance:", compliance_lines)
+
     # Device - only if present
     device = activity.get("device_name")
     if device:

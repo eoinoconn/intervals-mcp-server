@@ -94,6 +94,34 @@ def test_get_activity_details(monkeypatch):
     assert "Activity: Morning Ride" in result
 
 
+def test_get_activity_details_with_compliance(monkeypatch):
+    """
+    Test get_activity_details includes workout compliance when the activity is paired with a workout.
+    """
+    sample = {
+        "name": "Threshold Workout",
+        "id": 456,
+        "type": "Ride",
+        "startTime": "2024-06-01T07:00:00Z",
+        "distance": 40000,
+        "duration": 5400,
+        "paired_event_id": 789,
+        "compliance": 92.0,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_details(456))
+    assert "Workout Compliance:" in result
+    assert "Paired Event ID: 789" in result
+    assert "Compliance: 92.00%" in result
+
+
 def test_get_events(monkeypatch):
     """
     Test get_events returns a formatted string containing event details when given a sample event.
