@@ -13,7 +13,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
+from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params, validate_date
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
@@ -344,8 +344,8 @@ def _build_result(
 
 @mcp.tool()
 async def get_training_summary(
-    start_date: str,
-    end_date: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
     athlete_id: str | None = None,
     api_key: str | None = None,
 ) -> str:
@@ -358,8 +358,8 @@ async def get_training_summary(
     training context before making recommendations.
 
     Args:
-        start_date: Start date in YYYY-MM-DD format
-        end_date: End date in YYYY-MM-DD format
+        start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
+        end_date: End date in YYYY-MM-DD format (optional, defaults to today)
         athlete_id: Intervals.icu athlete ID (optional, falls back to ATHLETE_ID env var)
         api_key: Intervals.icu API key (optional, falls back to API_KEY env var)
     """
@@ -367,6 +367,9 @@ async def get_training_summary(
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
+
+    # Resolve dates (default: last 30 days)
+    start_date, end_date = resolve_date_params(start_date, end_date)
 
     # Validate dates
     try:
