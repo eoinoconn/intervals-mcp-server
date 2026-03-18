@@ -64,6 +64,45 @@ def test_format_activity_summary_omits_none_fields():
     assert "N/A" not in result
 
 
+def test_format_activity_summary_with_compliance():
+    """
+    Test that format_activity_summary includes workout compliance when present.
+    """
+    data = {
+        "name": "Threshold Intervals",
+        "id": "a1",
+        "type": "Ride",
+        "startTime": "2024-06-01T07:00:00Z",
+        "distance": 40000,
+        "duration": 5400,
+        "pairedEventId": 12345,
+        "compliance": 0.85,
+    }
+    result = format_activity_summary(data)
+    assert "Workout Compliance:" in result
+    assert "Paired Event ID: 12345" in result
+    assert "Compliance: 85%" in result
+
+
+def test_format_activity_summary_omits_compliance_when_absent():
+    """
+    Test that format_activity_summary omits the compliance section when
+    the activity has no paired workout.
+    """
+    data = {
+        "name": "Easy Spin",
+        "id": "a2",
+        "type": "Ride",
+        "startTime": "2024-06-02T08:00:00Z",
+        "distance": 20000,
+        "duration": 3600,
+    }
+    result = format_activity_summary(data)
+    assert "Workout Compliance:" not in result
+    assert "Paired Event ID" not in result
+    assert "Compliance:" not in result
+
+
 def test_format_activity_compact():
     """
     Test that format_activity_compact returns a concise single-line format.
