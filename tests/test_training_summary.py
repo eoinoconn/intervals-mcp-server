@@ -386,13 +386,14 @@ def test_get_training_summary_default_dates(monkeypatch):
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
     monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
 
+    now = datetime.now()
     result_str = asyncio.run(
         get_training_summary(athlete_id="i1")
     )
     result = json.loads(result_str)
 
-    expected_end = datetime.now().strftime("%Y-%m-%d")
-    expected_start = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    expected_end = now.strftime("%Y-%m-%d")
+    expected_start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
     assert result["period"]["start"] == expected_start
     assert result["period"]["end"] == expected_end
 
