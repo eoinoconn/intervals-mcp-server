@@ -4,9 +4,10 @@ Wellness-related MCP tools for Intervals.icu.
 This module contains tools for retrieving athlete wellness data.
 """
 
+import json
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_wellness_entry
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -53,18 +54,4 @@ async def get_wellness_data(
             f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
         )
 
-    wellness_summary = "Wellness Data:\n\n"
-
-    # Handle both list and dictionary responses
-    if isinstance(result, dict):
-        for date_str, data in result.items():
-            # Add the date to the data dictionary if it's not already present
-            if isinstance(data, dict) and "date" not in data:
-                data["date"] = date_str
-            wellness_summary += format_wellness_entry(data) + "\n\n"
-    elif isinstance(result, list):
-        for entry in result:
-            if isinstance(entry, dict):
-                wellness_summary += format_wellness_entry(entry) + "\n\n"
-
-    return wellness_summary
+    return json.dumps(result, indent=2)

@@ -4,12 +4,12 @@ Activity-related MCP tools for Intervals.icu.
 This module contains tools for retrieving and managing athlete activities.
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_activity_summary, format_intervals
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -89,15 +89,7 @@ def _format_activities_response(
             )
         return f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."
 
-    # Format the output
-    activities_summary = "Activities:\n\n"
-    for activity in activities:
-        if isinstance(activity, dict):
-            activities_summary += format_activity_summary(activity) + "\n"
-        else:
-            activities_summary += f"Invalid activity format: {activity}\n\n"
-
-    return activities_summary
+    return json.dumps(activities, indent=2)
 
 
 @mcp.tool()
@@ -190,21 +182,7 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
     if not isinstance(activity_data, dict):
         return f"Invalid activity format for activity {activity_id}."
 
-    # Return a more detailed view of the activity
-    detailed_view = format_activity_summary(activity_data)
-
-    # Add additional details if available
-    if "zones" in activity_data:
-        zones = activity_data["zones"]
-        detailed_view += "\nPower Zones:\n"
-        for zone in zones.get("power", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
-        detailed_view += "\nHeart Rate Zones:\n"
-        for zone in zones.get("hr", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
-    return detailed_view
+    return json.dumps(activity_data, indent=2)
 
 
 @mcp.tool()
@@ -235,8 +213,7 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
     ):
         return f"No interval data or unrecognized format for activity {activity_id}."
 
-    # Format the intervals data
-    return format_intervals(result)
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -286,32 +263,4 @@ async def get_activity_streams(
     if not streams:
         return f"No stream data found for activity {activity_id}."
 
-    # Format the streams data
-    streams_summary = f"Activity Streams for {activity_id}:\n\n"
-
-    for stream in streams:
-        if not isinstance(stream, dict):
-            continue
-
-        stream_type = stream.get("type", "unknown")
-        stream_name = stream.get("name", stream_type)
-        data = stream.get("data", [])
-        value_type = stream.get("valueType", "")
-
-        streams_summary += f"Stream: {stream_name} ({stream_type})\n"
-        streams_summary += f"  Value Type: {value_type}\n"
-        streams_summary += f"  Data Points: {len(data)}\n"
-
-        # Show first few and last few data points for preview
-        if data:
-            if len(data) <= 10:
-                streams_summary += f"  Values: {data}\n"
-            else:
-                preview_start = data[:5]
-                preview_end = data[-5:]
-                streams_summary += f"  First 5 values: {preview_start}\n"
-                streams_summary += f"  Last 5 values: {preview_end}\n"
-
-        streams_summary += "\n"
-
-    return streams_summary
+    return json.dumps(streams, indent=2)

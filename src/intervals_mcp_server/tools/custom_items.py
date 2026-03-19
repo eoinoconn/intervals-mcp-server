@@ -9,7 +9,6 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_custom_item_details
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 # Import mcp instance from shared module for tool registration
@@ -43,16 +42,7 @@ async def get_custom_items(
     if not result:
         return f"No custom items found for athlete {athlete_id_to_use}."
 
-    output = "Custom Items:\n\n"
-    for item in result:
-        if isinstance(item, dict):
-            output += f"- ID: {item.get('id')}\n"
-            output += f"  Name: {item.get('name', 'N/A')}\n"
-            output += f"  Type: {item.get('type', 'N/A')}\n"
-            if item.get("description"):
-                output += f"  Description: {item['description']}\n"
-            output += "\n"
-    return output
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -82,7 +72,7 @@ async def get_custom_item_by_id(
     if not result or not isinstance(result, dict):
         return f"No custom item found with ID {item_id}."
 
-    return format_custom_item_details(result)
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -138,7 +128,7 @@ async def create_custom_item(
     if not result or not isinstance(result, dict):
         return "Error: Unexpected response when creating custom item."
 
-    return f"Successfully created custom item:\n\n{format_custom_item_details(result)}"
+    return f"Successfully created custom item:\n\n{json.dumps(result, indent=2)}"
 
 
 @mcp.tool()
@@ -200,7 +190,7 @@ async def update_custom_item(
     if not result or not isinstance(result, dict):
         return "Error: Unexpected response when updating custom item."
 
-    return f"Successfully updated custom item:\n\n{format_custom_item_details(result)}"
+    return f"Successfully updated custom item:\n\n{json.dumps(result, indent=2)}"
 
 
 @mcp.tool()

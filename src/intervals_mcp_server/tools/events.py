@@ -11,7 +11,6 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
-from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
 
@@ -152,14 +151,7 @@ async def get_events(
     if not events:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
 
-    events_summary = "Events:\n\n"
-    for event in events:
-        if not isinstance(event, dict):
-            continue
-
-        events_summary += format_event_summary(event) + "\n\n"
-
-    return events_summary
+    return json.dumps(events, indent=2)
 
 
 @mcp.tool()
@@ -196,7 +188,7 @@ async def get_event_by_id(
     if not isinstance(result, dict):
         return f"Invalid event format for event {event_id}."
 
-    return format_event_details(result)
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool()
