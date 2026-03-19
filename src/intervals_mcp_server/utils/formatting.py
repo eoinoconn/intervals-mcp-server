@@ -472,21 +472,93 @@ def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = Non
     return "\n".join(lines)
 
 
+def _get_event_date(event: dict[str, Any]) -> str:
+    """Extract and normalise the event date string."""
+    raw = event.get("start_date_local", event.get("date", "Unknown"))
+    if isinstance(raw, str) and len(raw) > 10:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return str(raw)
+
+
+def _get_event_type(event: dict[str, Any]) -> str:
+    """Derive a short event-type label."""
+    if event.get("category") == "WORKOUT" or event.get("workout"):
+        return "Workout"
+    if event.get("race"):
+        return "Race"
+    return event.get("category", "Other")
+
+
+def _format_event_load_fields(event: dict[str, Any]) -> list[str]:
+    """Return formatted load-metric lines that have data."""
+    lines: list[str] = []
+    _add_field(lines, "Training Load", event.get("icu_training_load"))
+    _add_field(lines, "ATL", event.get("atl"))
+    _add_field(lines, "CTL", event.get("ctl"))
+    _add_field(lines, "Intensity", event.get("icu_intensity"))
+    _add_field(lines, "Strain", event.get("strain"))
+    return lines
+
+
+def format_event_compact(event: dict[str, Any]) -> str:
+    """Format an event as a single compact line for summary listings."""
+    event_date = _get_event_date(event)
+    event_type = _get_event_type(event)
+    event_name = event.get("name", "Unnamed")
+    event_id = event.get("id", "")
+
+    parts = [f"{event_date} | {event_type}: {event_name} (ID:{event_id})"]
+
+    tl = event.get("icu_training_load")
+    if tl is not None:
+        parts.append(f"TL:{tl}")
+
+    atl = event.get("atl")
+    if atl is not None:
+        parts.append(f"ATL:{atl}")
+
+    ctl = event.get("ctl")
+    if ctl is not None:
+        parts.append(f"CTL:{ctl}")
+
+    intensity = event.get("icu_intensity")
+    if intensity is not None:
+        parts.append(f"Int:{intensity}")
+
+    strain = event.get("strain")
+    if strain is not None:
+        parts.append(f"Strain:{strain}")
+
+    return " | ".join(parts)
+
+
 def format_event_summary(event: dict[str, Any]) -> str:
     """Format a basic event summary into a readable string."""
 
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    event_date = _get_event_date(event)
+    event_type = _get_event_type(event)
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
 
-    return f"""Date: {event_date}
-ID: {event_id}
-Type: {event_type}
-Name: {event_name}
-Description: {event_desc}"""
+    lines = [
+        f"Date: {event_date}",
+        f"ID: {event_id}",
+        f"Type: {event_type}",
+        f"Name: {event_name}",
+    ]
+
+    load_lines = _format_event_load_fields(event)
+    if load_lines:
+        lines.extend(load_lines)
+
+    lines.append(f"Description: {event_desc}")
+
+    return "\n".join(lines)
 
 
 def format_event_details(event: dict[str, Any]) -> str:

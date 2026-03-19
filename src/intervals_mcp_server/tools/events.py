@@ -11,7 +11,7 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
-from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
+from intervals_mcp_server.utils.formatting import format_event_compact, format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id, validate_date
 
@@ -93,6 +93,7 @@ async def get_events(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    compact: bool = True,
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -101,6 +102,7 @@ async def get_events(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
+        compact: If True, return a brief one-line-per-event summary to save tokens (optional, defaults to True)
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -134,12 +136,13 @@ async def get_events(
     if not events:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
 
+    formatter = format_event_compact if compact else format_event_summary
     events_summary = "Events:\n\n"
     for event in events:
         if not isinstance(event, dict):
             continue
 
-        events_summary += format_event_summary(event) + "\n\n"
+        events_summary += formatter(event) + "\n"
 
     return events_summary
 
