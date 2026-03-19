@@ -7,7 +7,6 @@ athlete-summary, activities, and wellness.
 """
 
 import asyncio
-import json
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -310,7 +309,7 @@ async def get_training_summary(
     end_date: str | None = None,
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> str:
+) -> Any:
     """
     Returns a compact JSON training snapshot for the given date range.
 
@@ -328,7 +327,7 @@ async def get_training_summary(
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     # Resolve dates (default: last 30 days)
     start_date, end_date = resolve_date_params(start_date, end_date)
@@ -338,7 +337,7 @@ async def get_training_summary(
         validate_date(start_date)
         validate_date(end_date)
     except ValueError as e:
-        return f"Error: {e}"
+        return {"error": str(e)}
 
     # Three concurrent API calls
     summary_coro = make_intervals_request(
@@ -365,7 +364,7 @@ async def get_training_summary(
     for label, raw in [("athlete-summary", summary_raw), ("activities", activities_raw),
                        ("wellness", wellness_raw)]:
         if isinstance(raw, dict) and "error" in raw:
-            return f"Error fetching {label}: {raw.get('message', 'Unknown error')}"
+            return {"error": f"Error fetching {label}: {raw.get('message', 'Unknown error')}"}
 
     # Normalise to lists
     summary_weeks: list[dict[str, Any]] = (
@@ -385,4 +384,4 @@ async def get_training_summary(
     result = _build_result(summary_weeks, activities_list, wellness_list,
                            start_date, end_date, today)
 
-    return json.dumps(result, separators=(",", ":"))
+    return result

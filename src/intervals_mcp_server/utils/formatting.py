@@ -26,6 +26,30 @@ def strip_nulls(d: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def deep_strip_nulls(obj: Any) -> Any:
+    """Recursively remove keys with None or empty values from nested structures.
+
+    Processes dicts and lists recursively.  Zero values and ``False`` are
+    preserved — only ``None``, empty strings, empty lists and empty dicts
+    are stripped.
+    """
+    if isinstance(obj, dict):
+        out: dict[str, Any] = {}
+        for k, v in obj.items():
+            cleaned = deep_strip_nulls(v)
+            if cleaned is None:
+                continue
+            if isinstance(cleaned, str) and not cleaned:
+                continue
+            if isinstance(cleaned, (list, dict)) and not cleaned:
+                continue
+            out[k] = cleaned
+        return out
+    if isinstance(obj, list):
+        return [deep_strip_nulls(item) for item in obj]
+    return obj
+
+
 def set_if(
     target: dict[str, Any],
     key: str,

@@ -366,7 +366,7 @@ def test_get_training_summary_integration(monkeypatch):
             athlete_id="i1",
         )
     )
-    result = json.loads(result_str)
+    result = result_str
 
     # Period
     assert result["period"]["start"] == "2026-02-15"
@@ -387,20 +387,19 @@ def test_get_training_summary_integration(monkeypatch):
 
 
 def test_get_training_summary_compact_json(monkeypatch):
-    """Output should be compact JSON with no whitespace."""
+    """Output should be a dict (JSON-serializable) with no None values."""
     reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
     fake = _make_fake_request(reversed_weeks, [], [])
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
     monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
 
-    result_str = asyncio.run(
+    result = asyncio.run(
         get_training_summary(start_date="2026-02-15", end_date="2026-03-17", athlete_id="i1")
     )
-    # Compact JSON should have no spaces after : or ,
-    assert " : " not in result_str
-    # Verify it's valid JSON
-    json.loads(result_str)
+    assert isinstance(result, dict)
+    # Verify it's JSON-serializable
+    json.dumps(result)
 
 
 def test_get_training_summary_partial_week(monkeypatch):
@@ -428,7 +427,7 @@ def test_get_training_summary_partial_week(monkeypatch):
     result_str = asyncio.run(
         get_training_summary(start_date="2026-01-01", end_date="2027-01-01", athlete_id="i1")
     )
-    result = json.loads(result_str)
+    result = result_str
     assert result["weeks"][0]["partial"] is True
 
 
@@ -444,7 +443,7 @@ def test_get_training_summary_default_dates(monkeypatch):
     result_str = asyncio.run(
         get_training_summary(athlete_id="i1")
     )
-    result = json.loads(result_str)
+    result = result_str
 
     expected_end = now.strftime("%Y-%m-%d")
     expected_start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -460,7 +459,8 @@ def test_get_training_summary_error_no_athlete(monkeypatch):
     result = asyncio.run(
         get_training_summary(start_date="2026-01-01", end_date="2026-02-01")
     )
-    assert "Error" in result
+    assert isinstance(result, dict)
+    assert "error" in result
 
 
 def test_get_training_summary_invalid_date(monkeypatch):
@@ -468,7 +468,8 @@ def test_get_training_summary_invalid_date(monkeypatch):
     result = asyncio.run(
         get_training_summary(start_date="not-a-date", end_date="2026-02-01", athlete_id="i1")
     )
-    assert "Error" in result
+    assert isinstance(result, dict)
+    assert "error" in result
 
 
 def test_get_training_summary_api_error(monkeypatch):
@@ -482,8 +483,9 @@ def test_get_training_summary_api_error(monkeypatch):
     result = asyncio.run(
         get_training_summary(start_date="2026-01-01", end_date="2026-02-01", athlete_id="i1")
     )
-    assert "Error" in result
-    assert "Unauthorized" in result
+    assert isinstance(result, dict)
+    assert "error" in result
+    assert "Unauthorized" in result["error"]
 
 
 def test_get_training_summary_empty_response(monkeypatch):
@@ -496,7 +498,7 @@ def test_get_training_summary_empty_response(monkeypatch):
     result_str = asyncio.run(
         get_training_summary(start_date="2026-01-01", end_date="2026-02-01", athlete_id="i1")
     )
-    result = json.loads(result_str)
+    result = result_str
     assert result["period"]["start"] == "2026-01-01"
 
 
@@ -527,7 +529,7 @@ def test_get_training_summary_zero_tss_sport(monkeypatch):
     result_str = asyncio.run(
         get_training_summary(start_date="2026-01-01", end_date="2026-01-12", athlete_id="i1")
     )
-    result = json.loads(result_str)
+    result = result_str
 
     # Check period_totals by_sport
     assert result["period_totals"]["by_sport"]["Workout"]["tss"] == 0.0
@@ -574,7 +576,7 @@ def test_get_training_summary_ac_ratio(monkeypatch):
     result_str = asyncio.run(
         get_training_summary(start_date="2026-02-15", end_date="2026-03-17", athlete_id="i1")
     )
-    result = json.loads(result_str)
+    result = result_str
     expected_ac = round(74.2 / 61.4, 2)
     assert result["load"]["ac_ratio"] == expected_ac
 
@@ -590,7 +592,7 @@ def test_get_training_summary_wellness_in_weeks(monkeypatch):
     result_str = asyncio.run(
         get_training_summary(start_date="2026-02-15", end_date="2026-03-17", athlete_id="i1")
     )
-    result = json.loads(result_str)
+    result = result_str
 
     # First week (2026-02-16 to 2026-02-22) should have wellness data from 2 entries
     week0 = result["weeks"][0]
@@ -609,7 +611,7 @@ def test_get_training_summary_compliance_in_weeks(monkeypatch):
     result_str = asyncio.run(
         get_training_summary(start_date="2026-02-15", end_date="2026-03-17", athlete_id="i1")
     )
-    result = json.loads(result_str)
+    result = result_str
 
     # First week should have compliance from activities on 2026-02-17 and 2026-02-18
     week0 = result["weeks"][0]

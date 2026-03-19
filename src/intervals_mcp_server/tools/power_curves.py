@@ -10,7 +10,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_power_curves
+from intervals_mcp_server.utils.formatting import deep_strip_nulls
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id
 
 # Import mcp instance from shared module for tool registration
@@ -129,7 +129,7 @@ async def get_athlete_power_curves(
     last_season: bool = True,
     include_normalised: bool = True,
     athlete_id: str | None = None,
-) -> str:
+) -> Any:
     """Get power curves for an athlete from Intervals.icu.
 
     Returns best power output for selected durations across specified time periods.
@@ -148,20 +148,20 @@ async def get_athlete_power_curves(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     activity_type = resolve_activity_type(activity_type)
 
     if indoor_outdoor and indoor_outdoor not in ("indoor", "outdoor"):
-        return "Error: indoor_outdoor must be 'indoor', 'outdoor', or omitted."
+        return {"error": "indoor_outdoor must be 'indoor', 'outdoor', or omitted."}
 
     date_error = _validate_dates(start_date, end_date)
     if date_error:
-        return date_error
+        return {"error": date_error}
 
     curves = _build_curves_param(this_season, last_season, start_date, end_date)
     if not curves:
-        return "Error: At least one curve must be selected (this_season, last_season, or a date range)."
+        return {"error": "At least one curve must be selected (this_season, last_season, or a date range)."}
 
     params: dict[str, Any] = {
         "curves": curves,
@@ -180,7 +180,7 @@ async def get_athlete_power_curves(
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching power curves: {error_message}"
+        return {"error": f"Error fetching power curves: {error_message}"}
 
     # Response has a "list" key containing curve objects
     curve_list: list[dict[str, Any]] = []
@@ -190,7 +190,7 @@ async def get_athlete_power_curves(
         curve_list = result
 
     if not curve_list:
-        return f"No power curve data found for athlete {athlete_id_to_use} ({activity_type})."
+        return {"error": f"No power curve data found for athlete {athlete_id_to_use} ({activity_type})."}
 
     extracted: list[dict[str, Any]] = []
     for curve in curve_list:
@@ -198,6 +198,9 @@ async def get_athlete_power_curves(
             extracted.append(_extract_curve_data(curve, durations, include_normalised))
 
     if not extracted:
-        return f"No power curve data found for athlete {athlete_id_to_use} ({activity_type})."
+        return {"error": f"No power curve data found for athlete {athlete_id_to_use} ({activity_type})."}
 
-    return format_power_curves(extracted, activity_type, include_normalised)
+    return {
+        "activity_type": activity_type,
+        "curves": [deep_strip_nulls(c) for c in extracted],
+    }

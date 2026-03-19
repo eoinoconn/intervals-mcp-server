@@ -9,7 +9,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import format_custom_item_details
+from intervals_mcp_server.utils.formatting import deep_strip_nulls
 from intervals_mcp_server.utils.validation import resolve_athlete_id
 
 # Import mcp instance from shared module for tool registration
@@ -22,7 +22,7 @@ config = get_config()
 async def get_custom_items(
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> str:
+) -> Any:
     """Get custom items (charts, custom fields, zones, etc.) for an athlete from Intervals.icu
 
     Args:
@@ -31,28 +31,19 @@ async def get_custom_items(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
-        return f"Error fetching custom items: {result.get('message')}"
+        return {"error": f"Error fetching custom items: {result.get('message')}"}
 
     if not result:
-        return f"No custom items found for athlete {athlete_id_to_use}."
+        return {"error": f"No custom items found for athlete {athlete_id_to_use}."}
 
-    output = "Custom Items:\n\n"
-    for item in result:
-        if isinstance(item, dict):
-            output += f"- ID: {item.get('id')}\n"
-            output += f"  Name: {item.get('name', 'N/A')}\n"
-            output += f"  Type: {item.get('type', 'N/A')}\n"
-            if item.get("description"):
-                output += f"  Description: {item['description']}\n"
-            output += "\n"
-    return output
+    return [deep_strip_nulls(item) for item in result if isinstance(item, dict)]
 
 
 @mcp.tool()
@@ -60,7 +51,7 @@ async def get_custom_item_by_id(
     item_id: int,
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> str:
+) -> Any:
     """Get detailed information for a specific custom item from Intervals.icu
 
     Args:
@@ -70,19 +61,19 @@ async def get_custom_item_by_id(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
-        return f"Error fetching custom item: {result.get('message')}"
+        return {"error": f"Error fetching custom item: {result.get('message')}"}
 
     if not result or not isinstance(result, dict):
-        return f"No custom item found with ID {item_id}."
+        return {"error": f"No custom item found with ID {item_id}."}
 
-    return format_custom_item_details(result)
+    return deep_strip_nulls(result)
 
 
 @mcp.tool()
@@ -94,7 +85,7 @@ async def create_custom_item(
     description: str | None = None,
     content: dict[str, Any] | None = None,
     visibility: str | None = None,
-) -> str:
+) -> Any:
     """Create a new custom item for an athlete on Intervals.icu
 
     Args:
@@ -110,7 +101,7 @@ async def create_custom_item(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     data: dict[str, Any] = {"name": name, "type": item_type}
     if description is not None:
@@ -120,7 +111,7 @@ async def create_custom_item(
             try:
                 content = json.loads(content)
             except json.JSONDecodeError:
-                return "Error: content must be valid JSON when passed as a string."
+                return {"error": "content must be valid JSON when passed as a string."}
         data["content"] = content
     if visibility is not None:
         data["visibility"] = visibility
@@ -133,12 +124,12 @@ async def create_custom_item(
     )
 
     if isinstance(result, dict) and "error" in result:
-        return f"Error creating custom item: {result.get('message')}"
+        return {"error": f"Error creating custom item: {result.get('message')}"}
 
     if not result or not isinstance(result, dict):
-        return "Error: Unexpected response when creating custom item."
+        return {"error": "Unexpected response when creating custom item."}
 
-    return f"Successfully created custom item:\n\n{format_custom_item_details(result)}"
+    return deep_strip_nulls(result)
 
 
 @mcp.tool()
@@ -151,7 +142,7 @@ async def update_custom_item(
     description: str | None = None,
     content: dict[str, Any] | None = None,
     visibility: str | None = None,
-) -> str:
+) -> Any:
     """Update an existing custom item for an athlete on Intervals.icu
 
     Args:
@@ -168,7 +159,7 @@ async def update_custom_item(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     data: dict[str, Any] = {}
     if name is not None:
@@ -182,7 +173,7 @@ async def update_custom_item(
             try:
                 content = json.loads(content)
             except json.JSONDecodeError:
-                return "Error: content must be valid JSON when passed as a string."
+                return {"error": "content must be valid JSON when passed as a string."}
         data["content"] = content
     if visibility is not None:
         data["visibility"] = visibility
@@ -195,12 +186,12 @@ async def update_custom_item(
     )
 
     if isinstance(result, dict) and "error" in result:
-        return f"Error updating custom item: {result.get('message')}"
+        return {"error": f"Error updating custom item: {result.get('message')}"}
 
     if not result or not isinstance(result, dict):
-        return "Error: Unexpected response when updating custom item."
+        return {"error": "Unexpected response when updating custom item."}
 
-    return f"Successfully updated custom item:\n\n{format_custom_item_details(result)}"
+    return deep_strip_nulls(result)
 
 
 @mcp.tool()
@@ -208,7 +199,7 @@ async def delete_custom_item(
     item_id: int,
     athlete_id: str | None = None,
     api_key: str | None = None,
-) -> str:
+) -> Any:
     """Delete a custom item for an athlete from Intervals.icu
 
     Args:
@@ -218,7 +209,7 @@ async def delete_custom_item(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
@@ -227,6 +218,6 @@ async def delete_custom_item(
     )
 
     if isinstance(result, dict) and "error" in result:
-        return f"Error deleting custom item: {result.get('message')}"
+        return {"error": f"Error deleting custom item: {result.get('message')}"}
 
-    return f"Successfully deleted custom item {item_id}."
+    return {"success": True, "deleted_id": item_id}

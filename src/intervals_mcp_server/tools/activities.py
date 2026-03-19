@@ -9,11 +9,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import (
-    format_activity_compact,
-    format_activity_summary,
-    format_intervals,
-)
+from intervals_mcp_server.utils.formatting import deep_strip_nulls
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -85,22 +81,14 @@ def _format_activities_response(
     athlete_id: str,
     include_unnamed: bool,
     compact: bool = False,
-) -> str:
+) -> dict[str, Any] | list[dict[str, Any]]:
     """Format the activities response based on the results."""
     if not activities:
         if include_unnamed:
-            return (
-                f"No valid activities found for athlete {athlete_id} in the specified date range."
-            )
-        return f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."
+            return {"error": f"No valid activities found for athlete {athlete_id} in the specified date range."}
+        return {"error": f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."}
 
-    formatter = format_activity_compact if compact else format_activity_summary
-    activities_summary = "Activities:\n\n"
-    for activity in activities:
-        if isinstance(activity, dict):
-            activities_summary += formatter(activity) + "\n"
-
-    return activities_summary
+    return [deep_strip_nulls(a) for a in activities if isinstance(a, dict)]
 
 
 @mcp.tool()
@@ -112,7 +100,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     limit: int = 10,
     include_unnamed: bool = False,
     compact: bool = True,
-) -> str:
+) -> Any:
     """Get a list of activities for an athlete from Intervals.icu
 
     Args:
@@ -127,7 +115,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     start_date, end_date = resolve_date_params(start_date, end_date)
 
@@ -143,16 +131,16 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     # Check for error
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching activities: {error_message}"
+        return {"error": f"Error fetching activities: {error_message}"}
 
     if not result:
-        return f"No activities found for athlete {athlete_id_to_use} in the specified date range."
+        return {"error": f"No activities found for athlete {athlete_id_to_use} in the specified date range."}
 
     # Parse activities from result
     activities = _parse_activities_from_result(result)
 
     if not activities:
-        return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
+        return {"error": f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."}
 
     # Filter and fetch more if needed
     if not include_unnamed:
@@ -172,7 +160,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
 
 
 @mcp.tool()
-async def get_activity_details(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_details(activity_id: str, api_key: str | None = None) -> Any:
     """Get detailed information for a specific activity from Intervals.icu
 
     Args:
@@ -184,36 +172,22 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity details: {error_message}"
+        return {"error": f"Error fetching activity details: {error_message}"}
 
     # Format the response
     if not result:
-        return f"No details found for activity {activity_id}."
+        return {"error": f"No details found for activity {activity_id}."}
 
     # If result is a list, use the first item if available
     activity_data = result[0] if isinstance(result, list) and result else result
     if not isinstance(activity_data, dict):
-        return f"Invalid activity format for activity {activity_id}."
+        return {"error": f"Invalid activity format for activity {activity_id}."}
 
-    # Return a more detailed view of the activity
-    detailed_view = format_activity_summary(activity_data)
-
-    # Add additional details if available
-    if "zones" in activity_data:
-        zones = activity_data["zones"]
-        detailed_view += "\nPower Zones:\n"
-        for zone in zones.get("power", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
-        detailed_view += "\nHeart Rate Zones:\n"
-        for zone in zones.get("hr", []):
-            detailed_view += f"Zone {zone.get('number')}: {zone.get('secondsInZone')} seconds\n"
-
-    return detailed_view
+    return deep_strip_nulls(activity_data)
 
 
 @mcp.tool()
-async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> Any:
     """Get interval data for a specific activity from Intervals.icu
 
     This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
@@ -228,20 +202,19 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching intervals: {error_message}"
+        return {"error": f"Error fetching intervals: {error_message}"}
 
     # Format the response
     if not result:
-        return f"No interval data found for activity {activity_id}."
+        return {"error": f"No interval data found for activity {activity_id}."}
 
     # If the result is empty or doesn't contain expected fields
     if not isinstance(result, dict) or not any(
         key in result for key in ["icu_intervals", "icu_groups"]
     ):
-        return f"No interval data or unrecognized format for activity {activity_id}."
+        return {"error": f"No interval data or unrecognized format for activity {activity_id}."}
 
-    # Format the intervals data
-    return format_intervals(result)
+    return deep_strip_nulls(result)
 
 
 @mcp.tool()
@@ -249,7 +222,7 @@ async def get_activity_streams(
     activity_id: str,
     api_key: str | None = None,
     stream_types: str | None = None,
-) -> str:
+) -> Any:
     """Get stream data for a specific activity from Intervals.icu
 
     This endpoint returns time-series data for an activity, including metrics like power, heart rate,
@@ -279,44 +252,16 @@ async def get_activity_streams(
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching activity streams: {error_message}"
+        return {"error": f"Error fetching activity streams: {error_message}"}
 
     # Format the response
     if not result:
-        return f"No stream data found for activity {activity_id}."
+        return {"error": f"No stream data found for activity {activity_id}."}
 
     # Ensure result is a list
     streams = result if isinstance(result, list) else []
 
     if not streams:
-        return f"No stream data found for activity {activity_id}."
+        return {"error": f"No stream data found for activity {activity_id}."}
 
-    # Format the streams data
-    streams_summary = f"Activity Streams for {activity_id}:\n\n"
-
-    for stream in streams:
-        if not isinstance(stream, dict):
-            continue
-
-        stream_type = stream.get("type", "unknown")
-        stream_name = stream.get("name", stream_type)
-        data = stream.get("data", [])
-        value_type = stream.get("valueType", "")
-
-        streams_summary += f"Stream: {stream_name} ({stream_type})\n"
-        streams_summary += f"  Value Type: {value_type}\n"
-        streams_summary += f"  Data Points: {len(data)}\n"
-
-        # Show first few and last few data points for preview
-        if data:
-            if len(data) <= 10:
-                streams_summary += f"  Values: {data}\n"
-            else:
-                preview_start = data[:5]
-                preview_end = data[-5:]
-                streams_summary += f"  First 5 values: {preview_start}\n"
-                streams_summary += f"  Last 5 values: {preview_end}\n"
-
-        streams_summary += "\n"
-
-    return streams_summary
+    return [deep_strip_nulls(s) for s in streams if isinstance(s, dict)]
