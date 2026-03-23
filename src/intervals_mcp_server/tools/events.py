@@ -92,6 +92,7 @@ async def get_events(
     api_key: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    compact: bool = True,
 ) -> Any:
     """Get events for an athlete from Intervals.icu
 
@@ -100,6 +101,7 @@ async def get_events(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
+        compact: If True, return a brief one-line-per-event summary to save tokens (optional, defaults to True)
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
