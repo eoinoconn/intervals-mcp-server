@@ -472,21 +472,140 @@ def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = Non
     return "\n".join(lines)
 
 
+def _normalise_date(raw: Any) -> str:
+    """Normalise a raw date value to YYYY-MM-DD where possible."""
+    if isinstance(raw, str) and len(raw) > 10:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return str(raw)
+
+
+def _parse_date(raw: str) -> datetime | None:
+    """Try to parse a raw date string into a datetime."""
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _is_multi_day(start_raw: str, end_raw: str) -> bool:
+    """Return True if start and end span more than a single calendar day.
+
+    Many single-day events have start/end exactly at midnight one day apart
+    (e.g. 2025-03-20T00:00:00 → 2025-03-21T00:00:00).  These are NOT
+    considered multi-day.
+    """
+    start_dt = _parse_date(start_raw)
+    end_dt = _parse_date(end_raw)
+    if start_dt is None or end_dt is None:
+        # Fall back to simple string comparison of normalised dates.
+        return _normalise_date(end_raw) > _normalise_date(start_raw)
+    delta = end_dt - start_dt
+    # More than 24 hours ⇒ multi-day
+    return delta.total_seconds() > 86400
+
+
+def _get_event_date(event: dict[str, Any]) -> str:
+    """Extract and normalise the event date string.
+
+    If the event spans multiple days the returned string uses the form
+    ``start to end``.  Single-day events (including those whose start and
+    end are exactly midnight one day apart) show only the start date.
+    """
+    start_raw = event.get("start_date_local", event.get("date", "Unknown"))
+    start = _normalise_date(start_raw)
+
+    end_raw = event.get("end_date_local")
+    if end_raw is not None and _is_multi_day(str(start_raw), str(end_raw)):
+        return f"{start} to {_normalise_date(end_raw)}"
+
+    return start
+
+
+def _get_event_type(event: dict[str, Any]) -> str:
+    """Derive a short event-type label."""
+    category = event.get("category")
+    if category and category == "WORKOUT":
+        return "Workout"
+    return category.replace("_", " ").title() if category is not None else "Other"
+
+
+def _round1(value: Any) -> Any:
+    """Round a numeric value to one decimal place, pass others through."""
+    if isinstance(value, float):
+        return round(value, 1)
+    return value
+
+
+def _format_event_load_fields(event: dict[str, Any]) -> list[str]:
+    """Return formatted load-metric lines that have data."""
+    lines: list[str] = []
+    _add_field(lines, "Training Load", _round1(event.get("icu_training_load")))
+    _add_field(lines, "ATL", _round1(event.get("icu_atl")))
+    _add_field(lines, "CTL", _round1(event.get("icu_ctl")))
+    _add_field(lines, "Intensity", _round1(event.get("icu_intensity")))
+    _add_field(lines, "Strain", _round1(event.get("strain_score")))
+    return lines
+
+
+def format_event_compact(event: dict[str, Any]) -> str:
+    """Format an event as a single compact line for summary listings."""
+    event_date = _get_event_date(event)
+    event_type = _get_event_type(event)
+    event_name = event.get("name", "Unnamed")
+    event_id = event.get("id", "")
+
+    parts = [f"{event_date} | {event_type}: {event_name} (ID:{event_id})"]
+
+    tl = event.get("icu_training_load")
+    if tl is not None:
+        parts.append(f"TL:{_round1(tl)}")
+
+    atl = event.get("icu_atl")
+    if atl is not None:
+        parts.append(f"ATL:{_round1(atl)}")
+
+    ctl = event.get("icu_ctl")
+    if ctl is not None:
+        parts.append(f"CTL:{_round1(ctl)}")
+
+    intensity = event.get("icu_intensity")
+    if intensity is not None:
+        parts.append(f"Int:{_round1(intensity)}")
+
+    strain = event.get("strain_score")
+    if strain is not None:
+        parts.append(f"Strain:{_round1(strain)}")
+
+    return " | ".join(parts)
+
+
 def format_event_summary(event: dict[str, Any]) -> str:
     """Format a basic event summary into a readable string."""
 
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    event_date = _get_event_date(event)
+    event_type = _get_event_type(event)
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
 
-    return f"""Date: {event_date}
-ID: {event_id}
-Type: {event_type}
-Name: {event_name}
-Description: {event_desc}"""
+    lines = [
+        f"Date: {event_date}",
+        f"ID: {event_id}",
+        f"Type: {event_type}",
+        f"Name: {event_name}",
+    ]
+
+    load_lines = _format_event_load_fields(event)
+    if load_lines:
+        lines.extend(load_lines)
+
+    lines.append(f"Description: {event_desc}")
+
+    return "\n".join(lines).rstrip("\n") + "\n\n"
 
 
 def format_event_details(event: dict[str, Any]) -> str:
