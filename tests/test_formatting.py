@@ -219,7 +219,7 @@ def test_format_event_summary():
         "id": "e1",
         "name": "Event1",
         "description": "desc",
-        "race": True,
+        "category": "RACE",
     }
     summary = format_event_summary(event)
     assert "Date: 2024-01-01" in summary
@@ -303,7 +303,7 @@ def test_format_event_compact_minimal():
         "date": "2024-03-01",
         "id": "e20",
         "name": "Easy Run",
-        "race": True,
+        "category": "RACE",
     }
     result = format_event_compact(event)
     assert "2024-03-01" in result
@@ -350,7 +350,7 @@ def test_format_event_details():
             "tss": 50,
             "intervals": [1, 2],
         },
-        "race": True,
+        "category": "RACE",
         "priority": "A",
         "result": "1st",
         "calendar": {"name": "Main"},

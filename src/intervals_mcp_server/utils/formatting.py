@@ -472,9 +472,8 @@ def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = Non
     return "\n".join(lines)
 
 
-def _get_event_date(event: dict[str, Any]) -> str:
-    """Extract and normalise the event date string."""
-    raw = event.get("start_date_local", event.get("date", "Unknown"))
+def _normalise_date(raw: Any) -> str:
+    """Normalise a raw date value to YYYY-MM-DD where possible."""
     if isinstance(raw, str) and len(raw) > 10:
         try:
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
@@ -484,13 +483,54 @@ def _get_event_date(event: dict[str, Any]) -> str:
     return str(raw)
 
 
+def _parse_date(raw: str) -> datetime | None:
+    """Try to parse a raw date string into a datetime."""
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _is_multi_day(start_raw: str, end_raw: str) -> bool:
+    """Return True if start and end span more than a single calendar day.
+
+    Many single-day events have start/end exactly at midnight one day apart
+    (e.g. 2025-03-20T00:00:00 → 2025-03-21T00:00:00).  These are NOT
+    considered multi-day.
+    """
+    start_dt = _parse_date(start_raw)
+    end_dt = _parse_date(end_raw)
+    if start_dt is None or end_dt is None:
+        # Fall back to simple string comparison of normalised dates.
+        return _normalise_date(end_raw) > _normalise_date(start_raw)
+    delta = end_dt - start_dt
+    # More than 24 hours ⇒ multi-day
+    return delta.total_seconds() > 86400
+
+
+def _get_event_date(event: dict[str, Any]) -> str:
+    """Extract and normalise the event date string.
+
+    If the event spans multiple days the returned string uses the form
+    ``start to end``.  Single-day events (including those whose start and
+    end are exactly midnight one day apart) show only the start date.
+    """
+    start_raw = event.get("start_date_local", event.get("date", "Unknown"))
+    start = _normalise_date(start_raw)
+
+    end_raw = event.get("end_date_local")
+    if end_raw is not None and _is_multi_day(str(start_raw), str(end_raw)):
+        return f"{start} to {_normalise_date(end_raw)}"
+
+    return start
+
+
 def _get_event_type(event: dict[str, Any]) -> str:
     """Derive a short event-type label."""
-    if event.get("category") == "WORKOUT" or event.get("workout"):
+    category = event.get("category")
+    if category and category == "WORKOUT":
         return "Workout"
-    if event.get("race"):
-        return "Race"
-    return event.get("category", "Other")
+    return category.replace("_", " ").title() if category is not None else "Other"
 
 
 def _round1(value: Any) -> Any:
@@ -565,7 +605,7 @@ def format_event_summary(event: dict[str, Any]) -> str:
 
     lines.append(f"Description: {event_desc}")
 
-    return "\n".join(lines)
+    return "\n".join(lines).rstrip("\n") + "\n\n"
 
 
 def format_event_details(event: dict[str, Any]) -> str:
