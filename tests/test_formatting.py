@@ -237,16 +237,16 @@ def test_format_event_summary_includes_load_metrics():
         "description": "Easy tempo session",
         "category": "WORKOUT",
         "icu_training_load": 85,
-        "atl": 60,
-        "ctl": 55,
+        "icu_atl": 60,
+        "icu_ctl": 55,
         "icu_intensity": 0.72,
-        "strain": 42,
+        "strain_score": 42,
     }
     summary = format_event_summary(event)
     assert "Training Load: 85" in summary
     assert "ATL: 60" in summary
     assert "CTL: 55" in summary
-    assert "Intensity: 0.72" in summary
+    assert "Intensity: 0.7" in summary
     assert "Strain: 42" in summary
     assert "Description: Easy tempo session" in summary
 
@@ -277,10 +277,10 @@ def test_format_event_compact():
         "name": "Sweet Spot Ride",
         "category": "WORKOUT",
         "icu_training_load": 95,
-        "atl": 70,
-        "ctl": 62,
+        "icu_atl": 70,
+        "icu_ctl": 62,
         "icu_intensity": 0.80,
-        "strain": 50,
+        "strain_score": 50,
     }
     result = format_event_compact(event)
     assert "2024-06-15" in result
@@ -324,10 +324,10 @@ def test_format_event_compact_is_smaller_than_summary():
         "description": "4x8min at threshold with 4min recovery between intervals",
         "category": "WORKOUT",
         "icu_training_load": 110,
-        "atl": 75,
-        "ctl": 65,
+        "icu_atl": 75,
+        "icu_ctl": 65,
         "icu_intensity": 0.85,
-        "strain": 55,
+        "strain_score": 55,
     }
     compact = format_event_compact(event)
     summary = format_event_summary(event)

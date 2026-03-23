@@ -493,14 +493,21 @@ def _get_event_type(event: dict[str, Any]) -> str:
     return event.get("category", "Other")
 
 
+def _round1(value: Any) -> Any:
+    """Round a numeric value to one decimal place, pass others through."""
+    if isinstance(value, float):
+        return round(value, 1)
+    return value
+
+
 def _format_event_load_fields(event: dict[str, Any]) -> list[str]:
     """Return formatted load-metric lines that have data."""
     lines: list[str] = []
-    _add_field(lines, "Training Load", event.get("icu_training_load"))
-    _add_field(lines, "ATL", event.get("icu_atl"))
-    _add_field(lines, "CTL", event.get("icu_ctl"))
-    _add_field(lines, "Intensity", event.get("icu_intensity"))
-    _add_field(lines, "Strain", event.get("strain_score"))
+    _add_field(lines, "Training Load", _round1(event.get("icu_training_load")))
+    _add_field(lines, "ATL", _round1(event.get("icu_atl")))
+    _add_field(lines, "CTL", _round1(event.get("icu_ctl")))
+    _add_field(lines, "Intensity", _round1(event.get("icu_intensity")))
+    _add_field(lines, "Strain", _round1(event.get("strain_score")))
     return lines
 
 
@@ -515,23 +522,23 @@ def format_event_compact(event: dict[str, Any]) -> str:
 
     tl = event.get("icu_training_load")
     if tl is not None:
-        parts.append(f"TL:{tl}")
+        parts.append(f"TL:{_round1(tl)}")
 
     atl = event.get("icu_atl")
     if atl is not None:
-        parts.append(f"ATL:{atl}")
+        parts.append(f"ATL:{_round1(atl)}")
 
     ctl = event.get("icu_ctl")
     if ctl is not None:
-        parts.append(f"CTL:{ctl}")
+        parts.append(f"CTL:{_round1(ctl)}")
 
     intensity = event.get("icu_intensity")
     if intensity is not None:
-        parts.append(f"Int:{intensity}")
+        parts.append(f"Int:{_round1(intensity)}")
 
     strain = event.get("strain_score")
     if strain is not None:
-        parts.append(f"Strain:{strain}")
+        parts.append(f"Strain:{_round1(strain)}")
 
     return " | ".join(parts)
 
