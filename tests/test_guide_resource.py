@@ -1,7 +1,7 @@
 """
 Unit tests for the intervals.icu guide resource.
 
-Validates that the usage_guide resource returns the expected structured
+Validates that the coaching_context_protocol resource returns the expected structured
 plain-text content and that key sections are present.
 """
 
@@ -13,13 +13,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
-from intervals_mcp_server.server import usage_guide  # pylint: disable=wrong-import-position
+from intervals_mcp_server.server import coaching_context_protocol  # pylint: disable=wrong-import-position
 from intervals_mcp_server.resources.guide import USAGE_GUIDE  # pylint: disable=wrong-import-position
 
 
-def test_usage_guide_returns_usage_guide_constant():
-    """usage_guide() must return the module-level USAGE_GUIDE constant."""
-    assert usage_guide() is USAGE_GUIDE
+def test_coaching_context_protocol_returns_usage_guide_constant():
+    """coaching_context_protocol() must return the module-level USAGE_GUIDE constant."""
+    assert coaching_context_protocol() is USAGE_GUIDE
 
 
 def test_usage_guide_is_plain_text():
@@ -100,8 +100,8 @@ def test_usage_guide_documents_zero_tss_behaviour():
     assert "WeightTraining" in USAGE_GUIDE
 
 
-def test_usage_guide_exported_in_server_all():
-    """usage_guide must be listed in server.py __all__."""
+def test_coaching_context_protocol_exported_in_server_all():
+    """coaching_context_protocol must be listed in server.py __all__."""
     from intervals_mcp_server.server import __all__ as server_all
 
-    assert "usage_guide" in server_all
+    assert "coaching_context_protocol" in server_all

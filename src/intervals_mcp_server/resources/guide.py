@@ -81,7 +81,7 @@ AVAILABLE TOOLS
 
 
 @mcp.resource("intervals-icu://guide")
-def usage_guide() -> str:
+def coaching_context_protocol() -> str:
     """
     Usage guide for the intervals.icu MCP server. Describes key concepts,
     data type distinctions, load metric definitions, and recommended tool

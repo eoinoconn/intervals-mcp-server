@@ -96,7 +96,7 @@ from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-i
 )
 
 # Import resource modules to register them (resources register themselves via @mcp.resource() decorators)
-from intervals_mcp_server.resources.guide import usage_guide  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.resources.guide import coaching_context_protocol  # pylint: disable=wrong-import-position  # noqa: E402
 
 # Re-export make_intervals_request and httpx_client for backward compatibility
 # pylint: disable=duplicate-code  # This __all__ list is intentionally similar to tools/__init__.py
@@ -121,7 +121,7 @@ __all__ = [
     "create_custom_item",
     "update_custom_item",
     "delete_custom_item",
-    "usage_guide",
+    "coaching_context_protocol",
 ]
 
 
