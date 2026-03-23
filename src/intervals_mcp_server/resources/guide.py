@@ -22,7 +22,7 @@ Activities — completed sessions uploaded from a device. Historical only.
 Events — items on the athlete's calendar. Three subtypes:
   - Planned workouts (future or past; have a linked activity if completed)
   - Races
-  - Notes / annotations
+  - Notes / annotations (these are common used to annotate what training phase the athlete is in)
   The `compliance` field is only present on an activity when it has an
   associated planned workout event. It measures execution vs prescription
   (0–100%), not a session count ratio.
@@ -57,6 +57,10 @@ Planning / calendar management:
 Reviewing a period:
   1. get_training_summary(start_date, end_date)
   2. get_wellness_data(start_date, end_date)    ← if wellness detail needed
+
+Context efficiency:
+  1. Make use of the 'compact' flags available for some tool calls to reduce 
+    the burden on the context window.
 
 AVAILABLE TOOLS
 
