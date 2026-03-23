@@ -70,6 +70,73 @@ def test_get_activities(monkeypatch):
     assert result[0]["id"] == 123
 
 
+def test_get_activities_compact_returns_subset(monkeypatch):
+    """
+    Test get_activities with compact=True returns only key fields.
+    """
+    sample = {
+        "name": "Morning Ride",
+        "id": 123,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+        "description": "A long ride",
+        "source": "Garmin",
+        "icu_ftp": 250,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return [sample]
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activities(athlete_id="1", limit=1, include_unnamed=True, compact=True))
+    assert isinstance(result, list)
+    assert len(result) == 1
+    activity = result[0]
+    assert activity["name"] == "Morning Ride"
+    assert activity["id"] == 123
+    assert activity["date"] == "2024-01-01"
+    # Compact should NOT include extra fields like description
+    assert "description" not in activity
+    assert "source" not in activity
+    assert "icu_ftp" not in activity
+
+
+def test_get_activities_non_compact_returns_full(monkeypatch):
+    """
+    Test get_activities with compact=False returns all fields.
+    """
+    sample = {
+        "name": "Morning Ride",
+        "id": 123,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+        "description": "A long ride",
+        "source": "Garmin",
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return [sample]
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activities(athlete_id="1", limit=1, include_unnamed=True, compact=False))
+    assert isinstance(result, list)
+    assert len(result) == 1
+    activity = result[0]
+    assert activity["name"] == "Morning Ride"
+    assert activity["description"] == "A long ride"
+    assert activity["source"] == "Garmin"
+
+
 def test_get_activity_details(monkeypatch):
     """
     Test get_activity_details returns a dict with the activity data.
@@ -147,6 +214,66 @@ def test_get_events(monkeypatch):
     assert isinstance(result, list)
     assert len(result) == 1
     assert result[0]["name"] == "Test Event"
+
+
+def test_get_events_compact_returns_subset(monkeypatch):
+    """
+    Test get_events with compact=True returns only key fields.
+    """
+    event = {
+        "date": "2024-01-01",
+        "id": "e1",
+        "name": "Test Event",
+        "description": "desc",
+        "category": "WORKOUT",
+        "icu_training_load": 85,
+        "icu_atl": 60,
+        "color": "#ff0000",
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return [event]
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", compact=True))
+    assert isinstance(result, list)
+    assert len(result) == 1
+    evt = result[0]
+    assert evt["name"] == "Test Event"
+    assert evt["id"] == "e1"
+    assert evt["trainingLoad"] == 85
+    assert evt["atl"] == 60
+    # Compact should NOT include extra fields like description or color
+    assert "description" not in evt
+    assert "color" not in evt
+
+
+def test_get_events_non_compact_returns_full(monkeypatch):
+    """
+    Test get_events with compact=False returns all fields.
+    """
+    event = {
+        "date": "2024-01-01",
+        "id": "e1",
+        "name": "Test Event",
+        "description": "desc",
+        "category": "WORKOUT",
+        "color": "#ff0000",
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return [event]
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", compact=False))
+    assert isinstance(result, list)
+    assert len(result) == 1
+    evt = result[0]
+    assert evt["name"] == "Test Event"
+    assert evt["description"] == "desc"
+    assert evt["color"] == "#ff0000"
 
 
 def test_get_event_by_id(monkeypatch):

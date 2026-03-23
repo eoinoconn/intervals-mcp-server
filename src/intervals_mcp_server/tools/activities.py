@@ -9,7 +9,7 @@ from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.formatting import deep_strip_nulls
+from intervals_mcp_server.utils.formatting import compact_activity_dict, deep_strip_nulls
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -88,6 +88,8 @@ def _format_activities_response(
             return {"error": f"No valid activities found for athlete {athlete_id} in the specified date range."}
         return {"error": f"No named activities found for athlete {athlete_id} in the specified date range. Try with include_unnamed=True to see all activities."}
 
+    if compact:
+        return [compact_activity_dict(a) for a in activities if isinstance(a, dict)]
     return [deep_strip_nulls(a) for a in activities if isinstance(a, dict)]
 
 

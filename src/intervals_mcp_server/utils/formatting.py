@@ -50,6 +50,106 @@ def deep_strip_nulls(obj: Any) -> Any:
     return obj
 
 
+def compact_activity_dict(activity: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact dict with key activity fields for token-efficient responses."""
+    out: dict[str, Any] = {}
+
+    # Core identifiers
+    out["id"] = activity.get("id")
+    out["name"] = activity.get("name", "Unnamed")
+    out["type"] = activity.get("type")
+
+    # Date — normalise to YYYY-MM-DD when possible
+    start_time = activity.get("startTime", activity.get("start_date", ""))
+    if isinstance(start_time, str) and len(start_time) > 10:
+        try:
+            dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+            start_time = dt.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    out["date"] = start_time
+
+    # Key metrics
+    distance = activity.get("distance")
+    if distance is not None:
+        out["distance"] = distance
+
+    duration = activity.get("duration") or activity.get("elapsed_time")
+    if duration is not None:
+        out["duration"] = duration
+
+    def _first(act: dict[str, Any], *keys: str) -> Any:
+        for k in keys:
+            v = act.get(k)
+            if v is not None:
+                return v
+        return None
+
+    tl = _first(activity, "trainingLoad", "icu_training_load")
+    if tl is not None:
+        out["trainingLoad"] = tl
+
+    avg_hr = _first(activity, "avgHr", "average_heartrate")
+    if avg_hr is not None:
+        out["avgHr"] = avg_hr
+
+    avg_power = _first(activity, "avgPower", "icu_average_watts", "average_watts")
+    if avg_power is not None:
+        out["avgPower"] = avg_power
+
+    return deep_strip_nulls(out)
+
+
+def compact_event_dict(event: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact dict with key event fields for token-efficient responses."""
+    out: dict[str, Any] = {}
+
+    out["id"] = event.get("id")
+    out["name"] = event.get("name", "Unnamed")
+
+    # Category / type
+    category = event.get("category")
+    if category is not None:
+        out["category"] = category
+
+    # Date — normalise, handle multi-day
+    start_raw = event.get("start_date_local", event.get("date", ""))
+    start = str(start_raw)
+    if isinstance(start_raw, str) and len(start_raw) > 10:
+        try:
+            dt = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
+            start = dt.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    out["date"] = start
+
+    end_raw = event.get("end_date_local")
+    if end_raw is not None:
+        end = str(end_raw)
+        if isinstance(end_raw, str) and len(end_raw) > 10:
+            try:
+                dt = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+                end = dt.strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+        if end != start:
+            out["endDate"] = end
+
+    # Key metrics
+    for api_key, out_key in [
+        ("icu_training_load", "trainingLoad"),
+        ("icu_atl", "atl"),
+        ("icu_ctl", "ctl"),
+        ("icu_intensity", "intensity"),
+        ("strain_score", "strain"),
+    ]:
+        val = event.get(api_key)
+        if val is not None:
+            out[out_key] = round(val, 1) if isinstance(val, float) else val
+
+    return deep_strip_nulls(out)
+
+
 def set_if(
     target: dict[str, Any],
     key: str,
