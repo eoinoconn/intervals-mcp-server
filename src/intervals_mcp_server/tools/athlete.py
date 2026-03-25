@@ -5,7 +5,6 @@ This module contains tools for retrieving athlete configuration data
 such as training zone definitions.
 """
 
-import json
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
@@ -242,7 +241,7 @@ async def get_athlete_zones(
     athlete_id: str | None = None,
     api_key: str | None = None,
     sport: str | None = None,
-) -> str:
+) -> Any:
     """
     Get training zone definitions for an athlete from Intervals.icu.
 
@@ -258,7 +257,7 @@ async def get_athlete_zones(
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
-        return error_msg
+        return {"error": error_msg}
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/sport-settings",
@@ -266,10 +265,10 @@ async def get_athlete_zones(
     )
 
     if isinstance(result, dict) and "error" in result:
-        return f"Error fetching athlete zones: {result.get('message')}"
+        return {"error": f"Error fetching athlete zones: {result.get('message')}"}
 
     if not result or not isinstance(result, list):
-        return f"No sport settings found for athlete {athlete_id_to_use}."
+        return {"error": f"No sport settings found for athlete {athlete_id_to_use}."}
 
     zones_list: list[dict[str, Any]] = []
     for setting in result:
@@ -282,9 +281,9 @@ async def get_athlete_zones(
     if sport:
         zones_list = [z for z in zones_list if sport in z.get("types", [])]
         if not zones_list:
-            return f"No zone settings found for sport '{sport}'."
+            return {"error": f"No zone settings found for sport '{sport}'."}
 
     if not zones_list:
-        return f"No zone settings found for athlete {athlete_id_to_use}."
+        return {"error": f"No zone settings found for athlete {athlete_id_to_use}."}
 
-    return json.dumps(zones_list, separators=(",", ":"))
+    return zones_list

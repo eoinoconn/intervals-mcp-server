@@ -123,8 +123,9 @@ def test_add_event_ride_workout(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
-    assert "e999" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     payload = fake.last_data
     assert payload["type"] == "Ride"
     assert payload["category"] == "WORKOUT"
@@ -171,7 +172,9 @@ def test_add_event_run_workout(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     payload = fake.last_data
     assert payload["type"] == "Run"
     assert "5x4min tempo" in payload["description"]
@@ -208,7 +211,9 @@ def test_add_event_swim_workout(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     payload = fake.last_data
     assert payload["type"] == "Swim"
 
@@ -235,7 +240,9 @@ def test_add_event_walk_workout(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     payload = fake.last_data
     assert payload["type"] == "Walk"
 
@@ -271,7 +278,9 @@ def test_add_event_row_workout(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     payload = fake.last_data
     assert payload["type"] == "Row"
 
@@ -311,7 +320,9 @@ def test_add_event_with_power_range_steps(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     # Verify the WorkoutDoc serialises ranges correctly via str()
     desc = fake.last_data["description"]
     assert "80%" in desc
@@ -344,7 +355,9 @@ def test_add_event_with_ramp_steps(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "ramp" in desc.lower()
 
@@ -375,7 +388,9 @@ def test_add_event_with_freeride_step(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "freeride" in desc.lower()
 
@@ -401,7 +416,9 @@ def test_add_event_with_maxeffort_step(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "maxeffort" in desc.lower()
 
@@ -432,7 +449,9 @@ def test_add_event_with_cadence_target(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "95" in desc
     assert "rpm" in desc.lower()
@@ -473,7 +492,9 @@ def test_add_event_with_hr_targets(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "75%" in desc
     assert "85%" in desc
@@ -505,7 +526,9 @@ def test_add_event_with_until_lap_press(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
 
 
 def test_add_event_with_hidepower(monkeypatch):
@@ -534,7 +557,9 @@ def test_add_event_with_hidepower(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "hidepower" in desc.lower()
 
@@ -563,7 +588,9 @@ def test_add_event_with_intensity(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "warmup" in desc.lower()
     assert "interval" in desc.lower()
@@ -610,7 +637,9 @@ def test_add_event_with_nested_repeats(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "5x" in desc
     assert "VO2max" in desc
@@ -641,7 +670,9 @@ def test_add_event_with_text_comments(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "Remember to hydrate" in desc
 
@@ -667,7 +698,9 @@ def test_add_event_with_moving_time_and_distance(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     payload = fake.last_data
     assert payload["moving_time"] == 3600
     assert payload["distance"] == 40000
@@ -688,8 +721,8 @@ def test_add_event_update_existing(monkeypatch):
         )
     )
 
-    assert "updated" in result.lower()
-    assert "e999" in result
+    assert result["action"] == "updated"
+    assert result["id"] == "e999"
     assert fake.last_method == "PUT"
     assert "e456" in fake.last_url
 
@@ -708,7 +741,9 @@ def test_add_event_no_workout_doc(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     payload = fake.last_data
     assert payload["description"] is None
     assert payload["name"] == "Rest Day Note"
@@ -749,7 +784,9 @@ def test_add_event_with_power_watts_and_zones(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "200W" in desc
     assert "Z3" in desc
@@ -781,6 +818,8 @@ def test_add_event_with_pace_zone(monkeypatch):
         )
     )
 
-    assert "Successfully created event id:" in result
+    assert result["success"] is True
+    assert result["id"] == "e999"
+    assert result["action"] == "created"
     desc = fake.last_data["description"]
     assert "Z2" in desc
