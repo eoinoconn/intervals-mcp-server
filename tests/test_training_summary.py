@@ -17,8 +17,10 @@ from intervals_mcp_server.server import get_training_summary  # noqa: E402
 from intervals_mcp_server.tools.training_summary import (  # noqa: E402
     _build_by_sport,
     _build_period_totals,
+    _build_planned_summary,
     _compute_weekly_compliance,
     _compute_weekly_wellness,
+    _group_events_by_week,
     _round1,
     _round2,
 )
@@ -164,6 +166,50 @@ SAMPLE_WELLNESS = [
     {"id": "2026-02-17", "hrvRMSSD": 57, "restingHR": 46, "sleepSecs": 28800, "fatigue": 4, "mood": 4},
     {"id": "2026-02-23", "hrvRMSSD": 50, "restingHR": 48, "sleepSecs": 25200, "fatigue": 5, "mood": 3},
     {"id": "2026-03-16", "hrvRMSSD": 49, "restingHR": 49, "sleepSecs": 24480, "fatigue": 6, "mood": 3},
+]
+
+
+SAMPLE_EVENTS = [
+    {
+        "id": "e1",
+        "start_date_local": "2026-02-17T00:00:00",
+        "type": "Ride",
+        "category": "WORKOUT",
+        "name": "Endurance Ride",
+        "icu_training_load": 120,
+        "moving_time": 5400,
+        "distance": 40000,
+    },
+    {
+        "id": "e2",
+        "start_date_local": "2026-02-19T00:00:00",
+        "type": "Run",
+        "category": "WORKOUT",
+        "name": "Easy Run",
+        "icu_training_load": 60,
+        "moving_time": 3600,
+        "distance": 10000,
+    },
+    {
+        "id": "e3",
+        "start_date_local": "2026-02-24T00:00:00",
+        "type": "Ride",
+        "category": "WORKOUT",
+        "name": "Sweet Spot",
+        "icu_training_load": 150,
+        "moving_time": 4800,
+        "distance": 35000,
+    },
+    {
+        "id": "e4",
+        "start_date_local": "2026-03-16T00:00:00",
+        "type": "Ride",
+        "category": "WORKOUT",
+        "name": "VO2max Intervals",
+        "icu_training_load": 90,
+        "moving_time": 3600,
+        "distance": 25000,
+    },
 ]
 
 
@@ -330,6 +376,7 @@ def test_build_period_totals():
     assert "by_sport" in totals
     assert totals["by_sport"]["Ride"]["count"] == 7
     assert totals["by_sport"]["Workout"]["tss"] == 0.0  # zero TSS preserved
+    assert "planned_totals" not in totals
 
 
 # ---------------------------------------------------------------------------
@@ -337,8 +384,12 @@ def test_build_period_totals():
 # ---------------------------------------------------------------------------
 
 
-def _make_fake_request(summary_response, activities_response, wellness_response):
+def _make_fake_request(summary_response, activities_response, wellness_response,
+                       events_response=None):
     """Create a fake make_intervals_request that routes based on URL."""
+    if events_response is None:
+        events_response = []
+
     async def fake_request(url="", **kwargs):
         if "athlete-summary" in url:
             return summary_response
@@ -346,6 +397,8 @@ def _make_fake_request(summary_response, activities_response, wellness_response)
             return activities_response
         if "wellness" in url:
             return wellness_response
+        if "events" in url:
+            return events_response
         return {"error": True, "message": "unexpected URL"}
     return fake_request
 
@@ -354,7 +407,8 @@ def test_get_training_summary_integration(monkeypatch):
     """Full integration test with mocked API calls."""
     # API returns reverse-chronological
     reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
-    fake = _make_fake_request(reversed_weeks, SAMPLE_ACTIVITIES, SAMPLE_WELLNESS)
+    fake = _make_fake_request(reversed_weeks, SAMPLE_ACTIVITIES, SAMPLE_WELLNESS,
+                              SAMPLE_EVENTS)
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
     monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
@@ -374,16 +428,32 @@ def test_get_training_summary_integration(monkeypatch):
 
     # Load - start from oldest week
     assert result["load"]["start"]["ctl"] == 52.1
-    assert result["load"]["current"]["ctl"] == 61.4
+    assert result["load"]["end"]["ctl"] == 61.4
     assert "ac_ratio" in result["load"]
 
     # Period totals
     assert result["period_totals"]["sessions"] == 11
+    assert "planned_totals" not in result["period_totals"]
 
-    # Weeks
+    # Weeks structure: completed data is nested under 'completed'
     assert len(result["weeks"]) == 3
     assert result["weeks"][0]["week_start"] == "2026-02-16"
     assert result["weeks"][-1]["week_start"] == "2026-03-16"
+
+    # Past weeks have 'completed' section
+    week0 = result["weeks"][0]
+    assert "completed" in week0
+    assert week0["completed"]["sessions"] == 4
+
+    # Past weeks with events have 'planned' section
+    assert "planned" in week0
+    assert week0["planned"]["sessions"] == 2  # e1 + e2
+
+    # Compliance is under completed
+    assert "compliance_pct" in week0["completed"]
+
+    # Load metrics at week top level
+    assert "ctl" in week0
 
 
 def test_get_training_summary_compact_json(monkeypatch):
@@ -404,10 +474,13 @@ def test_get_training_summary_compact_json(monkeypatch):
 
 
 def test_get_training_summary_partial_week(monkeypatch):
-    """The most recent week with week_end > today should be marked partial."""
-    # Use a date far in the future for the last week
-    future_week = {
-        "date": (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"),
+    """A week that straddles today should be marked partial."""
+    # Use today's date offset so that the week starts before today and ends after
+    today = datetime.now()
+    # Shift back 2 days so the 7-day week straddles today
+    week_start = (today - timedelta(days=2)).strftime("%Y-%m-%d")
+    partial_week = {
+        "date": week_start,
         "count": 1,
         "fitness": 50.0,
         "fatigue": 50.0,
@@ -420,7 +493,7 @@ def test_get_training_summary_partial_week(monkeypatch):
         "total_elevation_gain": 0,
         "byCategory": [],
     }
-    fake = _make_fake_request([future_week], [], [])
+    fake = _make_fake_request([partial_week], [], [])
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
     monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
@@ -433,7 +506,7 @@ def test_get_training_summary_partial_week(monkeypatch):
 
 
 def test_get_training_summary_default_dates(monkeypatch):
-    """When dates are omitted, should default to last 30 days."""
+    """When dates are omitted, should default to 30 days back and 30 days forward."""
     from datetime import datetime, timedelta
 
     fake = _make_fake_request([], [], [])
@@ -446,8 +519,8 @@ def test_get_training_summary_default_dates(monkeypatch):
     )
     result = json.loads(result_str)
 
-    expected_end = now.strftime("%Y-%m-%d")
     expected_start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    expected_end = (now + timedelta(days=30)).strftime("%Y-%m-%d")
     assert result["period"]["start"] == expected_start
     assert result["period"]["end"] == expected_end
 
@@ -500,6 +573,165 @@ def test_get_training_summary_empty_response(monkeypatch):
     assert result["period"]["start"] == "2026-01-01"
 
 
+# ---------------------------------------------------------------------------
+# New helper tests
+# ---------------------------------------------------------------------------
+
+
+def test_build_planned_summary_basic():
+    """Planned summary should aggregate event fields."""
+    events = [
+        {"type": "Ride", "icu_training_load": 100, "moving_time": 3600, "distance": 30000},
+        {"type": "Ride", "icu_training_load": 80, "moving_time": 2700, "distance": 20000},
+        {"type": "Run", "icu_training_load": 60, "moving_time": 3000, "distance": 8000},
+    ]
+    result = _build_planned_summary(events)
+    assert result["sessions"] == 3
+    assert result["tss"] == 240.0
+    assert result["duration_secs"] == 9300
+    assert result["distance_m"] == 58000.0
+    assert result["by_sport"]["Ride"]["count"] == 2
+    assert result["by_sport"]["Run"]["count"] == 1
+
+
+def test_build_planned_summary_missing_fields():
+    """Events with missing optional fields should still aggregate."""
+    events = [
+        {"type": "Ride", "icu_training_load": 50, "moving_time": 1800},
+        {"type": "Ride"},
+    ]
+    result = _build_planned_summary(events)
+    assert result["sessions"] == 2
+    assert result["tss"] == 50.0
+    assert result["duration_secs"] == 1800
+    assert "distance_m" not in result
+
+
+def test_build_planned_summary_empty():
+    """Empty events list should produce zero-value summary."""
+    result = _build_planned_summary([])
+    assert result["sessions"] == 0
+
+
+def test_group_events_by_week():
+    """Events should be grouped into the correct week buckets."""
+    grouped = _group_events_by_week(SAMPLE_EVENTS, SAMPLE_SUMMARY_WEEKS)
+    # e1 (Feb 17) and e2 (Feb 19) → week starting Feb 16
+    assert len(grouped["2026-02-16"]) == 2
+    # e3 (Feb 24) → week starting Feb 23
+    assert len(grouped["2026-02-23"]) == 1
+    # e4 (Mar 16) → week starting Mar 16
+    assert len(grouped["2026-03-16"]) == 1
+
+
+def test_group_events_by_week_no_events():
+    """No events should produce empty lists for each week."""
+    grouped = _group_events_by_week([], SAMPLE_SUMMARY_WEEKS)
+    assert all(len(v) == 0 for v in grouped.values())
+
+
+def test_future_week_has_no_completed(monkeypatch):
+    """Future weeks should only have planned section, no completed."""
+    from datetime import datetime, timedelta
+
+    future_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+    future_week = {
+        "date": future_date,
+        "count": 0,
+        "fitness": 65.0,
+        "fatigue": 70.0,
+        "form": -5.0,
+        "rampRate": None,
+        "training_load": 0,
+        "srpe": 0,
+        "time": 0,
+        "distance": 0,
+        "total_elevation_gain": 0,
+        "byCategory": [],
+    }
+    future_events = [
+        {
+            "id": "e10",
+            "start_date_local": f"{future_date}T00:00:00",
+            "type": "Ride",
+            "category": "WORKOUT",
+            "name": "Future Ride",
+            "icu_training_load": 100,
+            "moving_time": 3600,
+            "distance": 30000,
+        },
+    ]
+    fake = _make_fake_request([future_week], [], [], future_events)
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
+    monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
+
+    result_str = asyncio.run(
+        get_training_summary(
+            start_date=future_date,
+            end_date=(datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d"),
+            athlete_id="i1",
+        )
+    )
+    result = json.loads(result_str)
+    week = result["weeks"][0]
+
+    # Future week should have planned but no completed
+    assert "planned" in week
+    assert week["planned"]["sessions"] == 1
+    assert "completed" not in week
+    # Should still have projected load metrics
+    assert week["ctl"] == 65.0
+    # Should not have partial flag (it's fully in the future)
+    assert "partial" not in week
+
+
+def test_past_week_has_planned_and_completed(monkeypatch):
+    """Past weeks should have both planned and completed sections."""
+    reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
+    fake = _make_fake_request(reversed_weeks, SAMPLE_ACTIVITIES, SAMPLE_WELLNESS,
+                              SAMPLE_EVENTS)
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
+    monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
+
+    result_str = asyncio.run(
+        get_training_summary(
+            start_date="2026-02-15",
+            end_date="2026-03-17",
+            athlete_id="i1",
+        )
+    )
+    result = json.loads(result_str)
+
+    # First week (Feb 16) should have both planned and completed
+    week0 = result["weeks"][0]
+    assert "planned" in week0
+    assert "completed" in week0
+
+    # Planned: e1 (Ride, TL=120) + e2 (Run, TL=60)
+    assert week0["planned"]["sessions"] == 2
+    assert week0["planned"]["tss"] == 180.0
+
+    # Completed from athlete-summary
+    assert week0["completed"]["sessions"] == 4
+    assert week0["completed"]["tss"] == 380.0
+
+    # Compliance is under completed
+    assert "compliance_pct" in week0["completed"]
+    assert week0["completed"]["compliance_pct"] == 86
+
+    # by_sport under completed
+    assert "by_sport" in week0["completed"]
+
+    # Wellness at top level
+    assert "wellness" in week0
+
+    # Load at top level
+    assert "ctl" in week0
+    assert "atl" in week0
+
+
 def test_get_training_summary_zero_tss_sport(monkeypatch):
     """Zero-TSS sports like Workout must always include tss: 0."""
     week_with_zero_tss = {
@@ -532,12 +764,12 @@ def test_get_training_summary_zero_tss_sport(monkeypatch):
     # Check period_totals by_sport
     assert result["period_totals"]["by_sport"]["Workout"]["tss"] == 0.0
 
-    # Check week-level by_sport
-    assert result["weeks"][0]["by_sport"]["Workout"]["tss"] == 0.0
+    # Check week-level by_sport (now under completed)
+    assert result["weeks"][0]["completed"]["by_sport"]["Workout"]["tss"] == 0.0
 
 
 def test_get_training_summary_concurrent_calls(monkeypatch):
-    """Verify that three API calls are made (we track call URLs)."""
+    """Verify that four API calls are made (we track call URLs)."""
     call_urls = []
 
     async def tracking_request(url="", **kwargs):
@@ -548,6 +780,8 @@ def test_get_training_summary_concurrent_calls(monkeypatch):
             return []
         if "wellness" in url:
             return []
+        if "events" in url:
+            return []
         return {"error": True, "message": "unexpected"}
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", tracking_request)
@@ -557,14 +791,15 @@ def test_get_training_summary_concurrent_calls(monkeypatch):
         get_training_summary(start_date="2026-01-01", end_date="2026-02-01", athlete_id="i1")
     )
 
-    assert len(call_urls) == 3
+    assert len(call_urls) == 4
     assert any("athlete-summary" in u for u in call_urls)
     assert any("activities" in u for u in call_urls)
     assert any("wellness" in u for u in call_urls)
+    assert any("events" in u for u in call_urls)
 
 
 def test_get_training_summary_ac_ratio(monkeypatch):
-    """ac_ratio should be current ATL / current CTL, rounded to 2 d.p."""
+    """ac_ratio should be end ATL / end CTL, rounded to 2 d.p."""
     reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
     fake = _make_fake_request(reversed_weeks, [], [])
 
@@ -599,7 +834,7 @@ def test_get_training_summary_wellness_in_weeks(monkeypatch):
 
 
 def test_get_training_summary_compliance_in_weeks(monkeypatch):
-    """Compliance should be computed per week from activities."""
+    """Compliance should be computed per week under the completed section."""
     reversed_weeks = list(reversed(SAMPLE_SUMMARY_WEEKS))
     fake = _make_fake_request(reversed_weeks, SAMPLE_ACTIVITIES, SAMPLE_WELLNESS)
 
@@ -611,10 +846,191 @@ def test_get_training_summary_compliance_in_weeks(monkeypatch):
     )
     result = json.loads(result_str)
 
-    # First week should have compliance from activities on 2026-02-17 and 2026-02-18
+    # First week should have compliance under completed
     week0 = result["weeks"][0]
-    assert week0.get("compliance_pct") == 86  # (92+80)/2
+    assert week0["completed"].get("compliance_pct") == 86  # (92+80)/2
 
     # Second week (2026-02-23) has only null compliance → should be omitted
     week1 = result["weeks"][1]
-    assert "compliance_pct" not in week1
+    assert "compliance_pct" not in week1["completed"]
+
+
+def test_build_planned_summary_excludes_holiday_and_note():
+    """HOLIDAY and NOTE events should not count as training sessions."""
+    events = [
+        {"type": "Ride", "category": "WORKOUT", "icu_training_load": 100, "moving_time": 3600},
+        {"category": "HOLIDAY", "name": "Bank Holiday"},
+        {"category": "NOTE", "name": "Recovery week"},
+    ]
+    result = _build_planned_summary(events)
+    assert result["sessions"] == 1
+    assert result["tss"] == 100.0
+    assert "HOLIDAY" not in result.get("by_sport", {})
+    assert "NOTE" not in result.get("by_sport", {})
+
+
+def test_build_planned_summary_only_non_training():
+    """If a week has only HOLIDAY/NOTE events, planned summary has zero sessions."""
+    events = [
+        {"category": "HOLIDAY", "name": "Vacation"},
+        {"category": "NOTE", "name": "Deload"},
+    ]
+    result = _build_planned_summary(events)
+    assert result["sessions"] == 0
+
+
+def test_week_with_holiday_dates(monkeypatch):
+    """A week containing HOLIDAY events should list their dates."""
+    week_data = {
+        "date": "2026-02-16",
+        "count": 2, "fitness": 50.0, "fatigue": 50.0, "form": 0.0,
+        "rampRate": None, "training_load": 100, "srpe": 200,
+        "time": 7200, "distance": 30000, "total_elevation_gain": 0,
+        "byCategory": [],
+    }
+    events_with_holiday = [
+        {
+            "id": "e1", "start_date_local": "2026-02-17T00:00:00",
+            "type": "Ride", "category": "WORKOUT",
+            "icu_training_load": 100, "moving_time": 3600,
+        },
+        {
+            "id": "e_hol", "start_date_local": "2026-02-18T00:00:00",
+            "category": "HOLIDAY", "name": "Bank Holiday",
+        },
+    ]
+    fake = _make_fake_request([week_data], [], [], events_with_holiday)
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
+    monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
+
+    result_str = asyncio.run(
+        get_training_summary(start_date="2026-02-15", end_date="2026-02-23", athlete_id="i1")
+    )
+    result = json.loads(result_str)
+    week = result["weeks"][0]
+    assert week["holiday"] == ["2026-02-18"]
+    # Planned should only count the Ride, not the holiday
+    assert week["planned"]["sessions"] == 1
+
+
+def test_week_with_note(monkeypatch):
+    """A week containing a NOTE event should have the note text attached."""
+    week_data = {
+        "date": "2026-02-16",
+        "count": 1, "fitness": 50.0, "fatigue": 50.0, "form": 0.0,
+        "rampRate": None, "training_load": 80, "srpe": 150,
+        "time": 3600, "distance": 20000, "total_elevation_gain": 0,
+        "byCategory": [],
+    }
+    events_with_note = [
+        {
+            "id": "e1", "start_date_local": "2026-02-17T00:00:00",
+            "type": "Ride", "category": "WORKOUT",
+            "icu_training_load": 80, "moving_time": 3600,
+        },
+        {
+            "id": "e_note", "start_date_local": "2026-02-19T00:00:00",
+            "category": "NOTE", "name": "Start of build phase",
+        },
+    ]
+    fake = _make_fake_request([week_data], [], [], events_with_note)
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
+    monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
+
+    result_str = asyncio.run(
+        get_training_summary(start_date="2026-02-15", end_date="2026-02-23", athlete_id="i1")
+    )
+    result = json.loads(result_str)
+    week = result["weeks"][0]
+    assert "notes" in week
+    assert "Start of build phase" in week["notes"]
+    # Should not have holiday flag
+    assert "holiday" not in week
+
+
+def test_week_with_multiple_notes(monkeypatch):
+    """Multiple NOTE events in one week should all appear in the notes list."""
+    week_data = {
+        "date": "2026-02-16",
+        "count": 0, "fitness": 50.0, "fatigue": 50.0, "form": 0.0,
+        "rampRate": None, "training_load": 0, "srpe": 0,
+        "time": 0, "distance": 0, "total_elevation_gain": 0,
+        "byCategory": [],
+    }
+    events_with_notes = [
+        {
+            "id": "n1", "start_date_local": "2026-02-16T00:00:00",
+            "category": "NOTE", "name": "Recovery week",
+        },
+        {
+            "id": "n2", "start_date_local": "2026-02-18T00:00:00",
+            "category": "NOTE", "name": "Focus on mobility",
+        },
+    ]
+    fake = _make_fake_request([week_data], [], [], events_with_notes)
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
+    monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
+
+    result_str = asyncio.run(
+        get_training_summary(start_date="2026-02-15", end_date="2026-02-23", athlete_id="i1")
+    )
+    result = json.loads(result_str)
+    week = result["weeks"][0]
+    assert len(week["notes"]) == 2
+    assert "Recovery week" in week["notes"]
+    assert "Focus on mobility" in week["notes"]
+    # No planned section since only notes exist
+    assert "planned" not in week
+
+
+def test_holiday_spanning_two_weeks(monkeypatch):
+    """A holiday spanning two weeks should add dates to each week independently."""
+    week1 = {
+        "date": "2026-02-16",
+        "count": 0, "fitness": 50.0, "fatigue": 50.0, "form": 0.0,
+        "rampRate": None, "training_load": 0, "srpe": 0,
+        "time": 0, "distance": 0, "total_elevation_gain": 0,
+        "byCategory": [],
+    }
+    week2 = {
+        "date": "2026-02-23",
+        "count": 0, "fitness": 48.0, "fatigue": 40.0, "form": 8.0,
+        "rampRate": None, "training_load": 0, "srpe": 0,
+        "time": 0, "distance": 0, "total_elevation_gain": 0,
+        "byCategory": [],
+    }
+    # Holiday events spanning Thu-Wed across two weeks
+    holiday_events = [
+        {"id": "h1", "start_date_local": "2026-02-19T00:00:00", "category": "HOLIDAY", "name": "Vacation"},
+        {"id": "h2", "start_date_local": "2026-02-20T00:00:00", "category": "HOLIDAY", "name": "Vacation"},
+        {"id": "h3", "start_date_local": "2026-02-21T00:00:00", "category": "HOLIDAY", "name": "Vacation"},
+        {"id": "h4", "start_date_local": "2026-02-22T00:00:00", "category": "HOLIDAY", "name": "Vacation"},
+        {"id": "h5", "start_date_local": "2026-02-23T00:00:00", "category": "HOLIDAY", "name": "Vacation"},
+        {"id": "h6", "start_date_local": "2026-02-24T00:00:00", "category": "HOLIDAY", "name": "Vacation"},
+        {"id": "h7", "start_date_local": "2026-02-25T00:00:00", "category": "HOLIDAY", "name": "Vacation"},
+    ]
+    # API returns reverse-chronological
+    fake = _make_fake_request([week2, week1], [], [], holiday_events)
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake)
+    monkeypatch.setattr("intervals_mcp_server.tools.training_summary.make_intervals_request", fake)
+
+    result_str = asyncio.run(
+        get_training_summary(start_date="2026-02-15", end_date="2026-03-01", athlete_id="i1")
+    )
+    result = json.loads(result_str)
+
+    # Week 1 (Feb 16-22): 4 holiday days
+    w1 = result["weeks"][0]
+    assert w1["holiday"] == ["2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22"]
+
+    # Week 2 (Feb 23-Mar 1): 3 holiday days
+    w2 = result["weeks"][1]
+    assert w2["holiday"] == ["2026-02-23", "2026-02-24", "2026-02-25"]
+
+    # Neither week should have a planned section
+    assert "planned" not in w1
+    assert "planned" not in w2

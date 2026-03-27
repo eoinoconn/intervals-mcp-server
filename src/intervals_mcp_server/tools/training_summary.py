@@ -2,8 +2,8 @@
 Training summary MCP tool for Intervals.icu.
 
 This module provides a compact, coaching-ready training snapshot for a given
-date range by aggregating data from three concurrent API calls:
-athlete-summary, activities, and wellness.
+date range by aggregating data from four concurrent API calls:
+athlete-summary, activities, wellness, and events.
 """
 
 import asyncio
@@ -14,12 +14,16 @@ from typing import Any
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import set_if, strip_nulls
-from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params, validate_date
+from intervals_mcp_server.utils.dates import get_default_future_end_date, get_default_start_date
+from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
 
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
+
+# Event categories that are not training sessions
+_NON_TRAINING_CATEGORIES = {"HOLIDAY", "NOTE"}
 
 
 def _round1(value: Any) -> float | None:
@@ -40,6 +44,95 @@ def _round2(value: Any) -> float | None:
         return round(float(value), 2)
     except (TypeError, ValueError):
         return None
+
+
+def _build_planned_summary(
+    events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Aggregate a list of training events for one week into a planned summary.
+
+    Non-training events (holidays, notes) are excluded.
+    """
+    sessions = 0
+    tss = 0.0
+    duration = 0
+    distance = 0.0
+    sport_agg: dict[str, dict[str, float]] = {}
+
+    for ev in events:
+        cat = (ev.get("category") or "").upper()
+        if cat in _NON_TRAINING_CATEGORIES:
+            continue
+
+        sessions += 1
+        tss += ev.get("icu_training_load", 0) or 0
+        duration += ev.get("moving_time", 0) or 0
+        distance += ev.get("distance", 0) or 0
+
+        sport = ev.get("type") or ev.get("category") or "Other"
+        agg = sport_agg.setdefault(sport, {"count": 0, "tss": 0.0,
+                                            "duration_secs": 0, "distance_m": 0.0})
+        agg["count"] += 1
+        agg["tss"] += ev.get("icu_training_load", 0) or 0
+        agg["duration_secs"] += ev.get("moving_time", 0) or 0
+        agg["distance_m"] += ev.get("distance", 0) or 0
+
+    by_sport: dict[str, dict[str, Any]] = {}
+    for name, a in sport_agg.items():
+        sport_entry: dict[str, Any] = {
+            "count": int(a["count"]),
+            "tss": _round1(a["tss"]),
+            "duration_secs": int(a["duration_secs"]),
+        }
+        set_if(sport_entry, "distance_m", a["distance_m"], positive=True, transform=_round1)
+        by_sport[name] = strip_nulls(sport_entry)
+
+    result: dict[str, Any] = {
+        "sessions": sessions,
+        "tss": _round1(tss),
+        "duration_secs": duration,
+    }
+    set_if(result, "distance_m", distance, positive=True, transform=_round1)
+    if by_sport:
+        result["by_sport"] = by_sport
+    return strip_nulls(result)
+
+
+def _group_events_by_week(
+    events: list[dict[str, Any]],
+    summary_weeks: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Group events into week buckets keyed by week_start date string.
+
+    Uses the week boundaries from summary_weeks (each has a 'date' field
+    representing the week start, with weeks spanning 7 days).
+    """
+    # Build a sorted list of week start dates
+    week_starts = sorted(
+        datetime.strptime(w["date"], "%Y-%m-%d").date()
+        for w in summary_weeks
+        if w.get("date")
+    )
+    grouped: dict[str, list[dict[str, Any]]] = {
+        ws.strftime("%Y-%m-%d"): [] for ws in week_starts
+    }
+
+    for ev in events:
+        date_str = ev.get("start_date_local", "")
+        if not date_str:
+            continue
+        try:
+            ev_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+        # Find which week this event belongs to
+        for ws in reversed(week_starts):
+            we = ws + timedelta(days=6)
+            if ws <= ev_date <= we:
+                grouped[ws.strftime("%Y-%m-%d")].append(ev)
+                break
+
+    return grouped
 
 
 def _build_by_sport(
@@ -118,6 +211,7 @@ def _build_period_totals(
     set_if(totals, "elevation_m", elevation, positive=True, transform=_round1)
     if by_sport:
         totals["by_sport"] = by_sport
+
     return strip_nulls(totals)
 
 
@@ -207,9 +301,15 @@ def _build_weeks(
     summary_weeks: list[dict[str, Any]],
     activities: list[dict[str, Any]],
     wellness_data: list[dict[str, Any]],
+    events_by_week: dict[str, list[dict[str, Any]]],
     today: datetime,
 ) -> list[dict[str, Any]]:
-    """Build the per-week breakdown from athlete-summary data."""
+    """Build the per-week breakdown from athlete-summary data.
+
+    Past weeks have both ``planned`` and ``completed`` sections.
+    Future weeks have only a ``planned`` section.
+    The current (partial) week has both.
+    """
     result: list[dict[str, Any]] = []
     today_date = today.date()
 
@@ -223,36 +323,69 @@ def _build_weeks(
         week_start = date_str
         week_end = week_end_dt.strftime("%Y-%m-%d")
 
-        partial = week_end_dt > today_date
+        is_future = week_start_dt > today_date
+        partial = not is_future and week_end_dt > today_date
 
         week: dict[str, Any] = {
             "week_start": week_start,
             "week_end": week_end,
-            "partial": partial,
-            "tss": _round1(w.get("training_load")),
-            "srpe": _round1(w.get("srpe")),
-            "duration_secs": w.get("time", 0),
-            "sessions": w.get("count", 0),
-            "ramp_rate": _round1(w.get("rampRate")),
-            "ctl": _round1(w.get("fitness")),
-            "atl": _round1(w.get("fatigue")),
-            "tsb": _round1(w.get("form")),
         }
 
-        # Compliance (from activities, not events)
-        compliance = _compute_weekly_compliance(activities, week_start, week_end)
-        if compliance is not None:
-            week["compliance_pct"] = compliance
+        if partial:
+            week["partial"] = True
 
-        # By sport
-        by_cat = w.get("byCategory", [])
-        if by_cat:
-            week["by_sport"] = _build_by_sport(by_cat)
+        # --- Planned section (from events) ---
+        week_events = events_by_week.get(week_start, [])
+        if week_events:
+            planned = _build_planned_summary(week_events)
+            if planned.get("sessions", 0) > 0:
+                week["planned"] = planned
 
-        # Wellness
-        wellness = _compute_weekly_wellness(wellness_data, week_start, week_end)
-        if wellness:
-            week["wellness"] = wellness
+            # --- Holiday / Note annotations ---
+            for ev in week_events:
+                cat = (ev.get("category") or "").upper()
+                if cat == "HOLIDAY":
+                    date_str = ev.get("start_date_local", "")
+                    holiday_date = date_str[:10] if date_str else None
+                    if holiday_date:
+                        week.setdefault("holiday", []).append(holiday_date)
+                elif cat == "NOTE":
+                    note_text = ev.get("name") or ev.get("description") or ""
+                    if note_text:
+                        week.setdefault("notes", []).append(note_text)
+
+        # --- Completed section (only for past / current weeks) ---
+        if not is_future:
+            completed: dict[str, Any] = {
+                "sessions": w.get("count", 0),
+                "tss": _round1(w.get("training_load")),
+                "srpe": _round1(w.get("srpe")),
+                "duration_secs": w.get("time", 0),
+            }
+
+            # Compliance (from activities)
+            compliance = _compute_weekly_compliance(activities, week_start, week_end)
+            if compliance is not None:
+                completed["compliance_pct"] = compliance
+
+            # By sport
+            by_cat = w.get("byCategory", [])
+            if by_cat:
+                completed["by_sport"] = _build_by_sport(by_cat)
+
+            week["completed"] = strip_nulls(completed)
+
+        # --- Load metrics (available for all weeks) ---
+        week["ramp_rate"] = _round1(w.get("rampRate"))
+        week["ctl"] = _round1(w.get("fitness"))
+        week["atl"] = _round1(w.get("fatigue"))
+        week["tsb"] = _round1(w.get("form"))
+
+        # Wellness (only for past / current weeks)
+        if not is_future:
+            wellness = _compute_weekly_wellness(wellness_data, week_start, week_end)
+            if wellness:
+                week["wellness"] = wellness
 
         # Strip nulls
         result.append(strip_nulls(week))
@@ -264,6 +397,7 @@ def _build_result(
     summary_weeks: list[dict[str, Any]],
     activities: list[dict[str, Any]],
     wellness_data: list[dict[str, Any]],
+    events: list[dict[str, Any]],
     start_date: str,
     end_date: str,
     today: datetime,
@@ -289,16 +423,18 @@ def _build_result(
 
     load: dict[str, Any] = {
         "start": strip_nulls({"ctl": start_ctl, "atl": start_atl, "tsb": start_tsb}),
-        "current": strip_nulls({"ctl": current_ctl, "atl": current_atl, "tsb": current_tsb}),
+        "end": strip_nulls({"ctl": current_ctl, "atl": current_atl, "tsb": current_tsb}),
     }
     if ac_ratio is not None:
         load["ac_ratio"] = ac_ratio
+
+    events_by_week = _group_events_by_week(events, summary_weeks)
 
     result: dict[str, Any] = {
         "period": {"start": start_date, "end": end_date},
         "load": strip_nulls(load),
         "period_totals": _build_period_totals(summary_weeks),
-        "weeks": _build_weeks(summary_weeks, activities, wellness_data, today),
+        "weeks": _build_weeks(summary_weeks, activities, wellness_data, events_by_week, today),
     }
 
     return strip_nulls(result)
@@ -314,14 +450,17 @@ async def get_training_summary(
     """
     Returns a compact JSON training snapshot for the given date range.
 
-    Includes period-level load metrics with start/current deltas and a
-    per-week breakdown with per-sport session counts, load, and wellness.
+    Covers both past and future training. Past weeks include planned events
+    alongside completed activity data with compliance. Future weeks show
+    only planned events. Load metrics (CTL/ATL/TSB) are available for all
+    weeks including projected values for future weeks.
+
     Intended as the first call in any coaching conversation to establish
     training context before making recommendations.
 
     Args:
         start_date: Start date in YYYY-MM-DD format (optional, defaults to 30 days ago)
-        end_date: End date in YYYY-MM-DD format (optional, defaults to today)
+        end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from now)
         athlete_id: Intervals.icu athlete ID (optional, falls back to ATHLETE_ID env var)
         api_key: Intervals.icu API key (optional, falls back to API_KEY env var)
     """
@@ -330,8 +469,11 @@ async def get_training_summary(
     if error_msg:
         return error_msg
 
-    # Resolve dates (default: last 30 days)
-    start_date, end_date = resolve_date_params(start_date, end_date)
+    # Resolve dates (default: 30 days back, 30 days forward)
+    if not start_date:
+        start_date = get_default_start_date()
+    if not end_date:
+        end_date = get_default_future_end_date()
 
     # Validate dates
     try:
@@ -340,7 +482,7 @@ async def get_training_summary(
     except ValueError as e:
         return f"Error: {e}"
 
-    # Three concurrent API calls
+    # Four concurrent API calls
     summary_coro = make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/athlete-summary",
         api_key=api_key,
@@ -356,14 +498,19 @@ async def get_training_summary(
         api_key=api_key,
         params={"oldest": start_date, "newest": end_date},
     )
+    events_coro = make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/events",
+        api_key=api_key,
+        params={"oldest": start_date, "newest": end_date},
+    )
 
-    summary_raw, activities_raw, wellness_raw = await asyncio.gather(
-        summary_coro, activities_coro, wellness_coro
+    summary_raw, activities_raw, wellness_raw, events_raw = await asyncio.gather(
+        summary_coro, activities_coro, wellness_coro, events_coro
     )
 
     # Handle errors from any of the calls
     for label, raw in [("athlete-summary", summary_raw), ("activities", activities_raw),
-                       ("wellness", wellness_raw)]:
+                       ("wellness", wellness_raw), ("events", events_raw)]:
         if isinstance(raw, dict) and "error" in raw:
             return f"Error fetching {label}: {raw.get('message', 'Unknown error')}"
 
@@ -377,12 +524,15 @@ async def get_training_summary(
     wellness_list: list[dict[str, Any]] = (
         wellness_raw if isinstance(wellness_raw, list) else []
     )
+    events_list: list[dict[str, Any]] = (
+        events_raw if isinstance(events_raw, list) else []
+    )
 
     # Reverse athlete-summary to chronological (API returns reverse-chronological)
     summary_weeks.reverse()
 
     today = datetime.now()
     result = _build_result(summary_weeks, activities_list, wellness_list,
-                           start_date, end_date, today)
+                           events_list, start_date, end_date, today)
 
     return json.dumps(result, separators=(",", ":"))
