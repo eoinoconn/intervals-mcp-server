@@ -528,8 +528,8 @@ async def get_training_summary(
         events_raw if isinstance(events_raw, list) else []
     )
 
-    # Reverse athlete-summary to chronological (API returns reverse-chronological)
-    summary_weeks.reverse()
+    # Sort athlete-summary into chronological order by week date
+    summary_weeks.sort(key=lambda w: w.get("date", ""))
 
     today = datetime.now()
     result = _build_result(summary_weeks, activities_list, wellness_list,
