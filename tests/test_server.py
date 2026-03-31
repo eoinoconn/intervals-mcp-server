@@ -145,6 +145,121 @@ def test_get_events(monkeypatch):
     assert "Events:" in result
 
 
+def test_get_events_filter_by_single_category(monkeypatch):
+    """
+    Test get_events filters events by a single category (e.g. NOTE).
+    """
+    events = [
+        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
+        {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
+        {"date": "2024-01-02", "id": "e3", "name": "Christmas", "category": "HOLIDAY"},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="NOTE")
+    )
+    assert "Block 1" in result
+    assert "Workout A" not in result
+    assert "Christmas" not in result
+
+
+def test_get_events_filter_by_multiple_categories(monkeypatch):
+    """
+    Test get_events filters events by multiple comma-separated categories.
+    """
+    events = [
+        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
+        {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
+        {"date": "2024-01-02", "id": "e3", "name": "Christmas", "category": "HOLIDAY"},
+        {"date": "2024-01-03", "id": "e4", "name": "Spring Race", "category": "RACE"},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_events(
+            athlete_id="1", start_date="2024-01-01", end_date="2024-01-03",
+            category="HOLIDAY,RACE",
+        )
+    )
+    assert "Christmas" in result
+    assert "Spring Race" in result
+    assert "Workout A" not in result
+    assert "Block 1" not in result
+
+
+def test_get_events_filter_no_match(monkeypatch):
+    """
+    Test get_events returns a no-match message when category filter excludes all events.
+    """
+    events = [
+        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="NOTE")
+    )
+    assert "No events found" in result
+    assert "NOTE" in result
+
+
+def test_get_events_no_category_returns_all(monkeypatch):
+    """
+    Test get_events returns all events when no category filter is provided.
+    """
+    events = [
+        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
+        {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
+        {"date": "2024-01-02", "id": "e3", "name": "Christmas", "category": "HOLIDAY"},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02")
+    )
+    assert "Workout A" in result
+    assert "Block 1" in result
+    assert "Christmas" in result
+
+
+def test_get_events_category_case_insensitive(monkeypatch):
+    """
+    Test get_events category filter is case-insensitive.
+    """
+    events = [
+        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
+        {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return events
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="note")
+    )
+    assert "Block 1" in result
+    assert "Workout A" not in result
+
+
 def test_get_event_by_id(monkeypatch):
     """
     Test get_event_by_id returns a formatted string with event details for a given event ID.

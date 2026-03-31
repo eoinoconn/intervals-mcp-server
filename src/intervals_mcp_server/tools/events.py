@@ -94,6 +94,7 @@ async def get_events(
     start_date: str | None = None,
     end_date: str | None = None,
     compact: bool = True,
+    category: str | None = None,
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -103,6 +104,9 @@ async def get_events(
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
         compact: If True, return a brief one-line-per-event summary to save tokens (optional, defaults to True)
+        category: Filter events by category. Comma-separated list of categories to include
+            (e.g. "NOTE", "HOLIDAY,RACE", "WORKOUT,NOTE"). Valid categories: WORKOUT, RACE,
+            NOTE, HOLIDAY, TARGET. If not provided, all events are returned.
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -114,6 +118,11 @@ async def get_events(
         start_date = get_default_end_date()
     if not end_date:
         end_date = get_default_future_end_date()
+
+    # Parse category filter
+    category_filter: set[str] | None = None
+    if category:
+        category_filter = {c.strip().upper() for c in category.split(",")}
 
     # Call the Intervals.icu API
     params = {"oldest": start_date, "newest": end_date}
@@ -135,6 +144,12 @@ async def get_events(
 
     if not events:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
+
+    # Apply category filter if specified
+    if category_filter:
+        events = [e for e in events if isinstance(e, dict) and e.get("category") in category_filter]
+        if not events:
+            return f"No events found for athlete {athlete_id_to_use} matching categories: {', '.join(sorted(category_filter))}."
 
     formatter = format_event_compact if compact else format_event_summary
     events_summary = "Events:\n\n"
