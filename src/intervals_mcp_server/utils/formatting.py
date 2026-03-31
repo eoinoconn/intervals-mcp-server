@@ -87,6 +87,29 @@ def _add_section(lines: list[str], heading: str, section_lines: list[str]) -> No
         lines.extend(section_lines)
 
 
+def _build_ignore_flag_lines(data: dict[str, Any], prefix: str = "  ") -> list[str]:
+    """Build ignore-flag lines for activity data, only including flags that are True."""
+    lines: list[str] = []
+    if data.get("icu_ignore_time"):
+        lines.append(f"{prefix}Ignore Time: True")
+    if data.get("icu_ignore_power"):
+        lines.append(f"{prefix}Ignore Power: True")
+    if data.get("icu_ignore_hr"):
+        lines.append(f"{prefix}Ignore HR: True")
+    return lines
+
+
+def format_ignore_flags(activity_data: dict[str, Any]) -> str:
+    """Format ignore flags from activity data as a standalone block.
+
+    Returns an empty string when no flags are set to True.
+    """
+    lines = _build_ignore_flag_lines(activity_data, prefix="  ")
+    if lines:
+        return "Data Flags:\n" + "\n".join(lines) + "\n\n"
+    return ""
+
+
 def format_activity_summary(activity: dict[str, Any]) -> str:
     """Format an activity into a readable string, omitting fields with no data."""
     start_time = activity.get("startTime", activity.get("start_date", "Unknown"))
@@ -191,6 +214,9 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     if compliance is not None:
         _add_field(compliance_lines, "Compliance", f"{compliance:.2f}%")
     _add_section(lines, "  Workout Compliance:", compliance_lines)
+
+    # Data ignore flags - only if True
+    _add_section(lines, "  Data Flags:", _build_ignore_flag_lines(activity))
 
     # Device - only if present
     device = activity.get("device_name")

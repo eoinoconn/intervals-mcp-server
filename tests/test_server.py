@@ -122,6 +122,63 @@ def test_get_activity_details_with_compliance(monkeypatch):
     assert "Compliance: 92.00%" in result
 
 
+def test_get_activity_details_with_ignore_flags(monkeypatch):
+    """
+    Test get_activity_details includes data ignore flags when they are True.
+    """
+    sample = {
+        "name": "Indoor Ride",
+        "id": 789,
+        "type": "Ride",
+        "startTime": "2024-07-01T09:00:00Z",
+        "distance": 30000,
+        "duration": 3600,
+        "icu_ignore_time": True,
+        "icu_ignore_power": True,
+        "icu_ignore_hr": False,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_details(789))
+    assert "Data Flags:" in result
+    assert "Ignore Time: True" in result
+    assert "Ignore Power: True" in result
+    assert "Ignore HR" not in result
+
+
+def test_get_activity_details_no_ignore_flags(monkeypatch):
+    """
+    Test get_activity_details omits Data Flags section when all flags are False.
+    """
+    sample = {
+        "name": "Normal Ride",
+        "id": 101,
+        "type": "Ride",
+        "startTime": "2024-08-01T10:00:00Z",
+        "distance": 50000,
+        "duration": 7200,
+        "icu_ignore_time": False,
+        "icu_ignore_power": False,
+        "icu_ignore_hr": False,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_details(101))
+    assert "Data Flags:" not in result
+
+
 def test_get_events(monkeypatch):
     """
     Test get_events returns a formatted string containing event details when given a sample event.
@@ -263,6 +320,62 @@ def test_get_activity_intervals(monkeypatch):
     result = asyncio.run(get_activity_intervals("123"))
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+def test_get_activity_intervals_with_ignore_flags(monkeypatch):
+    """
+    Test get_activity_intervals includes data ignore flags when the activity has them set to True.
+    """
+    activity_data = {
+        "id": "i1",
+        "icu_ignore_time": True,
+        "icu_ignore_power": False,
+        "icu_ignore_hr": True,
+    }
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", _args[0] if _args else "")
+        if "/intervals" in str(url):
+            return INTERVALS_DATA
+        return activity_data
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_intervals("i1"))
+    assert "Data Flags:" in result
+    assert "Ignore Time: True" in result
+    assert "Ignore HR: True" in result
+    assert "Ignore Power" not in result
+    assert "Intervals Analysis:" in result
+    assert "Rep 1" in result
+
+
+def test_get_activity_intervals_no_ignore_flags(monkeypatch):
+    """
+    Test get_activity_intervals omits Data Flags section when all flags are False.
+    """
+    activity_data = {
+        "id": "i1",
+        "icu_ignore_time": False,
+        "icu_ignore_power": False,
+        "icu_ignore_hr": False,
+    }
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", _args[0] if _args else "")
+        if "/intervals" in str(url):
+            return INTERVALS_DATA
+        return activity_data
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_intervals("i1"))
+    assert "Data Flags:" not in result
+    assert "Intervals Analysis:" in result
 
 
 def test_get_activity_streams(monkeypatch):

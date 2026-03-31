@@ -12,6 +12,7 @@ from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
     format_activity_compact,
     format_activity_summary,
+    format_ignore_flags,
     format_intervals,
 )
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
@@ -240,8 +241,16 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
     ):
         return f"No interval data or unrecognized format for activity {activity_id}."
 
+    # Fetch activity details to get ignore flags
+    ignore_flags_text = ""
+    activity_result = await make_intervals_request(
+        url=f"/activity/{activity_id}", api_key=api_key
+    )
+    if isinstance(activity_result, dict) and "error" not in activity_result:
+        ignore_flags_text = format_ignore_flags(activity_result)
+
     # Format the intervals data
-    return format_intervals(result)
+    return ignore_flags_text + format_intervals(result)
 
 
 @mcp.tool()
