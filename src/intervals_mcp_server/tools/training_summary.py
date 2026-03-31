@@ -9,7 +9,7 @@ athlete-summary, activities, wellness, and events.
 import asyncio
 import json
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, TypedDict
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
@@ -24,6 +24,25 @@ config = get_config()
 
 # Event categories that are not training sessions
 _NON_TRAINING_CATEGORIES = {"HOLIDAY", "NOTE"}
+
+
+class _SportAgg(TypedDict):
+    """Accumulator for per-sport totals within a planned week."""
+
+    count: int
+    tss: float
+    duration_secs: int
+    distance_m: float
+
+
+class _PeriodSportAgg(TypedDict):
+    """Accumulator for per-sport totals across a summary period."""
+
+    count: int
+    tss: float
+    duration_secs: int
+    distance_m: float
+    elevation_m: float
 
 
 def _round1(value: Any) -> float | None:
@@ -57,7 +76,7 @@ def _build_planned_summary(
     tss = 0.0
     duration = 0
     distance = 0.0
-    sport_agg: dict[str, dict[str, float]] = {}
+    sport_agg: dict[str, _SportAgg] = {}
 
     for ev in events:
         cat = (ev.get("category") or "").upper()
@@ -168,7 +187,7 @@ def _build_period_totals(
     srpe = 0.0
     distance = 0.0
     elevation = 0.0
-    sport_agg: dict[str, dict[str, float]] = {}
+    sport_agg: dict[str, _PeriodSportAgg] = {}
 
     for w in weeks:
         sessions += w.get("count", 0)
