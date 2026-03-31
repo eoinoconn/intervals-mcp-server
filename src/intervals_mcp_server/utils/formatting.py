@@ -192,6 +192,16 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
         _add_field(compliance_lines, "Compliance", f"{compliance:.2f}%")
     _add_section(lines, "  Workout Compliance:", compliance_lines)
 
+    # Data ignore flags - only if True
+    ignore_lines: list[str] = []
+    if activity.get("icu_ignore_time"):
+        ignore_lines.append("  Ignore Time: True")
+    if activity.get("icu_ignore_power"):
+        ignore_lines.append("  Ignore Power: True")
+    if activity.get("icu_ignore_hr"):
+        ignore_lines.append("  Ignore HR: True")
+    _add_section(lines, "  Data Flags:", ignore_lines)
+
     # Device - only if present
     device = activity.get("device_name")
     if device:
