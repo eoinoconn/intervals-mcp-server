@@ -12,6 +12,7 @@ from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
     format_activity_compact,
     format_activity_summary,
+    format_ignore_flags,
     format_intervals,
 )
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
@@ -212,20 +213,6 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
     return detailed_view
 
 
-def _format_ignore_flags(activity_data: dict[str, Any]) -> str:
-    """Format ignore flags from activity data, only including flags that are True."""
-    flags: list[str] = []
-    if activity_data.get("icu_ignore_time"):
-        flags.append("  Ignore Time: True")
-    if activity_data.get("icu_ignore_power"):
-        flags.append("  Ignore Power: True")
-    if activity_data.get("icu_ignore_hr"):
-        flags.append("  Ignore HR: True")
-    if flags:
-        return "Data Flags:\n" + "\n".join(flags) + "\n\n"
-    return ""
-
-
 @mcp.tool()
 async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
     """Get interval data for a specific activity from Intervals.icu
@@ -260,7 +247,7 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
         url=f"/activity/{activity_id}", api_key=api_key
     )
     if isinstance(activity_result, dict) and "error" not in activity_result:
-        ignore_flags_text = _format_ignore_flags(activity_result)
+        ignore_flags_text = format_ignore_flags(activity_result)
 
     # Format the intervals data
     return ignore_flags_text + format_intervals(result)
