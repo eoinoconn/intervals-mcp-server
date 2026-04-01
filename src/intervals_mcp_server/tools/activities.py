@@ -4,6 +4,7 @@ Activity-related MCP tools for Intervals.icu.
 This module contains tools for retrieving and managing athlete activities.
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -251,6 +252,99 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
 
     # Format the intervals data
     return ignore_flags_text + format_intervals(result)
+
+
+@mcp.tool()
+async def get_activity_power_histogram(
+    activity_id: str,
+    bucket_size: int = 10,
+    api_key: str | None = None,
+) -> str:
+    """Get power histogram data for a specific activity from Intervals.icu.
+
+    Intended for in-depth analysis of a single activity. Avoid calling this tool
+    for a large number of activities at once to prevent excessive token usage.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        bucket_size: Width of each power bucket in watts (optional, defaults to 10)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/power-histogram",
+        api_key=api_key,
+        params={"bucketSize": bucket_size},
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching power histogram: {error_message}"
+
+    if not result:
+        return f"No power histogram data found for activity {activity_id}."
+
+    return json.dumps(result)
+
+
+@mcp.tool()
+async def get_activity_hr_histogram(
+    activity_id: str,
+    bucket_size: int = 5,
+    api_key: str | None = None,
+) -> str:
+    """Get heart rate histogram data for a specific activity from Intervals.icu.
+
+    Intended for in-depth analysis of a single activity. Avoid calling this tool
+    for a large number of activities at once to prevent excessive token usage.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        bucket_size: Width of each heart rate bucket in bpm (optional, defaults to 5)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/hr-histogram",
+        api_key=api_key,
+        params={"bucketSize": bucket_size},
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching heart rate histogram: {error_message}"
+
+    if not result:
+        return f"No heart rate histogram data found for activity {activity_id}."
+
+    return json.dumps(result)
+
+
+@mcp.tool()
+async def get_activity_pace_histogram(
+    activity_id: str,
+    api_key: str | None = None,
+) -> str:
+    """Get pace histogram data for a specific activity from Intervals.icu.
+
+    Intended for in-depth analysis of a single activity. Avoid calling this tool
+    for a large number of activities at once to prevent excessive token usage.
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/pace-histogram",
+        api_key=api_key,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching pace histogram: {error_message}"
+
+    if not result:
+        return f"No pace histogram data found for activity {activity_id}."
+
+    return json.dumps(result)
 
 
 @mcp.tool()
