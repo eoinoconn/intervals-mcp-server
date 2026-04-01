@@ -26,8 +26,13 @@ async def get_wellness_data(
     end_date: str | None = None,
     fields: list[str] | None = None,
     cadence: int | None = None,
+    include_all_fields: bool = False,
 ) -> str:
-    """Get wellness data for an athlete from Intervals.icu
+    """Get wellness data for an athlete from Intervals.icu.
+
+    By default returns standard wellness fields (training metrics, vitals, sleep,
+    subjective scores, etc.). Set include_all_fields=True to also include any
+    additional or custom fields configured by the user in Intervals.icu.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
@@ -39,8 +44,8 @@ async def get_wellness_data(
             "menstrual", "subjective", "nutrition", "activity".
         cadence: Return every Nth day of data (optional). For example, cadence=7
             returns one entry per week. Must be a positive integer.
+        include_all_fields: If True, include additional and custom fields beyond the standard set (optional, defaults to False)
     """
-    # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
         return error_msg
@@ -72,7 +77,6 @@ async def get_wellness_data(
     if isinstance(result, dict) and "error" in result:
         return f"Error fetching wellness data: {result.get('message')}"
 
-    # Format the response
     if not result:
         return (
             f"No wellness data found for athlete {athlete_id_to_use} in the specified date range."
@@ -95,6 +99,6 @@ async def get_wellness_data(
 
     wellness_summary = "Wellness Data:\n\n"
     for entry in entries:
-        wellness_summary += format_wellness_entry(entry, fields=fields_set) + "\n\n"
+        wellness_summary += format_wellness_entry(entry, fields=fields_set, include_all_fields=include_all_fields) + "\n\n"
 
     return wellness_summary

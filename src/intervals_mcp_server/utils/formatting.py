@@ -64,6 +64,27 @@ WELLNESS_FIELDS: set[str] = {
 }
 
 
+class _KeyTracker(dict):
+    """A dict wrapper that records which keys are accessed."""
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        super().__init__(data)
+        self.accessed: set[str] = set()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self.accessed.add(key)
+        return super().get(key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        self.accessed.add(key)
+        return super().__getitem__(key)
+
+    def __contains__(self, key: object) -> bool:
+        if isinstance(key, str):
+            self.accessed.add(key)
+        return super().__contains__(key)
+
+
 def _get_activity_value(activity: dict[str, Any], *keys: str) -> Any:
     """Get the first non-None value from a series of activity keys."""
     for key in keys:
@@ -404,7 +425,19 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = None) -> str:
+def _format_other_fields(entries: dict[str, Any], known_keys: set[str]) -> list[str]:
+    """Format any fields not already handled by the standard formatting sections."""
+    other_lines = []
+    for key, value in entries.items():
+        if key not in known_keys and value is not None:
+            if isinstance(value, (dict, list)):
+                other_lines.append(f"- {key}: {json.dumps(value)}")
+            else:
+                other_lines.append(f"- {key}: {value}")
+    return other_lines
+
+
+def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = None, include_all_fields: bool = False) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -431,6 +464,12 @@ def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = Non
         A formatted string representation of the wellness entry.
     """
     include_all = not fields
+    if include_all_fields:
+        entries = _KeyTracker(entries)
+        # Mark metadata keys so they don't appear in "Other Fields"
+        entries.get("date")
+        entries.get("updated")
+
     lines = ["Wellness Data:"]
     lines.append(f"Date: {entries.get('id', 'N/A')}")
     lines.append("")
@@ -494,6 +533,13 @@ def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = Non
         lines.append(f"Comments: {entries['comments']}")
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
+
+    if include_all_fields and isinstance(entries, _KeyTracker):
+        other_lines = _format_other_fields(entries, entries.accessed)
+        if other_lines:
+            lines.append("")
+            lines.append("Other Fields:")
+            lines.extend(other_lines)
 
     return "\n".join(lines)
 
@@ -676,6 +722,22 @@ Result: {event.get("result", "N/A")}"""
 Calendar: {cal.get("name", "N/A")}"""
 
     return event_details
+
+
+def format_activity_message(message: dict[str, Any]) -> str:
+    """Format an activity message/note into a readable string."""
+    created = message.get("created", "Unknown")
+    if isinstance(created, str) and len(created) > 10:
+        try:
+            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            created = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+
+    return f"""Author: {message.get("name", "Unknown")}
+Date: {created}
+Type: {message.get("type", "TEXT")}
+Content: {message.get("content", "")}"""
 
 
 def format_custom_item_details(item: dict[str, Any]) -> str:
