@@ -4,7 +4,6 @@ Activity-related MCP tools for Intervals.icu.
 This module contains tools for retrieving and managing athlete activities.
 """
 
-from datetime import datetime, timedelta
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
@@ -53,34 +52,30 @@ def _filter_named_activities(activities: list[dict[str, Any]]) -> list[dict[str,
     ]
 
 
-async def _fetch_more_activities(
-    athlete_id: str,
+def _filter_activities_by_date(
+    activities: list[dict[str, Any]],
     start_date: str,
-    api_key: str | None,
-    api_limit: int,
+    end_date: str,
 ) -> list[dict[str, Any]]:
-    """Fetch additional activities from an earlier date range."""
-    oldest_date = datetime.fromisoformat(start_date)
-    older_start_date = (oldest_date - timedelta(days=60)).strftime("%Y-%m-%d")
-    older_end_date = (oldest_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    """Filter activities to only include those within the specified date range.
 
-    if older_start_date >= older_end_date:
-        return []
+    Args:
+        activities: List of activity dictionaries.
+        start_date: Start date in YYYY-MM-DD format (inclusive).
+        end_date: End date in YYYY-MM-DD format (inclusive).
 
-    more_params = {
-        "oldest": older_start_date,
-        "newest": older_end_date,
-        "limit": api_limit,
-    }
-    more_result = await make_intervals_request(
-        url=f"/athlete/{athlete_id}/activities",
-        api_key=api_key,
-        params=more_params,
-    )
-
-    if isinstance(more_result, list):
-        return _filter_named_activities(more_result)
-    return []
+    Returns:
+        Filtered list of activities within the date range.
+    """
+    filtered: list[dict[str, Any]] = []
+    for activity in activities:
+        raw = activity.get("start_date_local") or activity.get("startTime") or activity.get("start_date", "")
+        if not raw:
+            continue
+        activity_date = str(raw)[:10]  # extract YYYY-MM-DD portion
+        if start_date <= activity_date <= end_date:
+            filtered.append(activity)
+    return filtered
 
 
 def _format_activities_response(
@@ -108,10 +103,10 @@ def _format_activities_response(
 
 @mcp.tool()
 async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-statements,too-many-branches,too-many-positional-arguments
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    start_date: str = "",
+    end_date: str = "",
     limit: int = 10,
     include_unnamed: bool = False,
     compact: bool = True,
@@ -157,16 +152,12 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     if not activities:
         return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
 
+    # Filter activities to the requested date range
+    activities = _filter_activities_by_date(activities, start_date, end_date)
+
     # Filter and fetch more if needed
     if not include_unnamed:
         activities = _filter_named_activities(activities)
-
-        # If we don't have enough named activities, try to fetch more
-        if len(activities) < limit:
-            more_activities = await _fetch_more_activities(
-                athlete_id_to_use, start_date, api_key, api_limit
-            )
-            activities.extend(more_activities)
 
     # Limit to requested count
     activities = activities[:limit]
@@ -175,7 +166,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
 
 
 @mcp.tool()
-async def get_activity_details(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_details(activity_id: str, api_key: str = "") -> str:
     """Get detailed information for a specific activity from Intervals.icu
 
     Args:
@@ -216,7 +207,7 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
 
 
 @mcp.tool()
-async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_intervals(activity_id: str, api_key: str = "") -> str:
     """Get interval data for a specific activity from Intervals.icu
 
     This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
@@ -258,8 +249,8 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
 @mcp.tool()
 async def get_activity_streams(
     activity_id: str,
-    api_key: str | None = None,
-    stream_types: str | None = None,
+    api_key: str = "",
+    stream_types: str = "",
 ) -> str:
     """Get stream data for a specific activity from Intervals.icu
 
@@ -334,7 +325,7 @@ async def get_activity_streams(
 
 
 @mcp.tool()
-async def get_activity_messages(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_messages(activity_id: str, api_key: str = "") -> str:
     """Get messages (notes/comments) for a specific activity from Intervals.icu
 
     Args:
@@ -369,7 +360,7 @@ async def get_activity_messages(activity_id: str, api_key: str | None = None) ->
 async def add_activity_message(
     activity_id: str,
     content: str,
-    api_key: str | None = None,
+    api_key: str = "",
 ) -> str:
     """Add a message (note/comment) to an activity on Intervals.icu
 

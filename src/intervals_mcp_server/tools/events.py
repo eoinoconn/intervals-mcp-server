@@ -89,10 +89,10 @@ async def _delete_events_list(
 
 @mcp.tool()
 async def get_events(
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    start_date: str = "",
+    end_date: str = "",
     compact: bool = True,
 ) -> str:
     """Get events for an athlete from Intervals.icu
@@ -150,8 +150,8 @@ async def get_events(
 @mcp.tool()
 async def get_event_by_id(
     event_id: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Get detailed information for a specific event from Intervals.icu
 
@@ -187,8 +187,8 @@ async def get_event_by_id(
 @mcp.tool()
 async def delete_event(
     event_id: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Delete event for an athlete from Intervals.icu
     Args:
@@ -237,8 +237,8 @@ async def _fetch_events_for_deletion(
 async def delete_events_by_date_range(
     start_date: str,
     end_date: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Delete events for an athlete from Intervals.icu in the specified date range.
 
@@ -267,13 +267,13 @@ async def delete_events_by_date_range(
 async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     workout_type: str,
     name: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    event_id: str | None = None,
-    start_date: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    event_id: str = "",
+    start_date: str = "",
     workout_doc: WorkoutDoc | None = None,
-    moving_time: int | None = None,
-    distance: int | None = None,
+    moving_time: int = 0,
+    distance: int = 0,
 ) -> str:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
@@ -349,7 +349,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
     try:
         event_data = _prepare_event_data(
-            name, workout_type, start_date, workout_doc, moving_time, distance
+            name, workout_type, start_date, workout_doc, moving_time or None, distance or None
         )
         return await _create_or_update_event_request(
             athlete_id_to_use, api_key, event_data, start_date, event_id

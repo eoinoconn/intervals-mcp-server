@@ -20,12 +20,12 @@ config = get_config()
 
 @mcp.tool()
 async def get_wellness_data(
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    start_date: str = "",
+    end_date: str = "",
     fields: list[str] | None = None,
-    cadence: int | None = None,
+    cadence: int = 0,
     include_all_fields: bool = False,
 ) -> str:
     """Get wellness data for an athlete from Intervals.icu.
@@ -64,7 +64,7 @@ async def get_wellness_data(
         fields_set = set(fields)
 
     # Validate cadence parameter
-    if cadence is not None and cadence < 1:
+    if cadence and cadence < 1:
         return "Cadence must be a positive integer (1 or greater)."
 
     # Call the Intervals.icu API
@@ -94,7 +94,7 @@ async def get_wellness_data(
         entries = [e for e in result if isinstance(e, dict)]
 
     # Apply cadence filtering (keep every Nth entry)
-    if cadence is not None and cadence > 1:
+    if cadence and cadence > 1:
         entries = entries[::cadence]
 
     wellness_summary = "Wellness Data:\n\n"

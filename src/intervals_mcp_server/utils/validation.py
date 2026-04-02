@@ -54,14 +54,14 @@ def resolve_athlete_id(
 
     Args:
         athlete_id: Optional athlete ID parameter.
-        default_athlete_id: Default athlete ID to use if athlete_id is None.
+        default_athlete_id: Default athlete ID to use if athlete_id is None or empty.
 
     Returns:
         Tuple of (athlete_id_to_use, error_message).
         athlete_id_to_use will be empty string if not found.
         error_message will be None if athlete_id is resolved successfully.
     """
-    athlete_id_to_use = athlete_id if athlete_id is not None else default_athlete_id
+    athlete_id_to_use = athlete_id if athlete_id else default_athlete_id
     if not athlete_id_to_use:
         return (
             "",
