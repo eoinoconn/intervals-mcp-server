@@ -8,6 +8,8 @@ import json
 from datetime import datetime
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_power_curves
@@ -118,7 +120,7 @@ def _extract_curve_data(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Athlete Power Curves", readOnlyHint=True, destructiveHint=False))
 async def get_athlete_power_curves(
     activity_type: str,
     durations: list[int] = DEFAULT_DURATIONS,

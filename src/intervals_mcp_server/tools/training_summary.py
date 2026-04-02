@@ -11,6 +11,8 @@ import json
 from datetime import datetime, timedelta
 from typing import Any, TypedDict
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import set_if, strip_nulls
@@ -459,7 +461,7 @@ def _build_result(
     return strip_nulls(result)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Training Summary", readOnlyHint=True, destructiveHint=False))
 async def get_training_summary(
     start_date: str | None = None,
     end_date: str | None = None,
