@@ -147,16 +147,13 @@ def test_get_events(monkeypatch):
 
 def test_get_events_filter_by_single_category(monkeypatch):
     """
-    Test get_events filters events by a single category (e.g. NOTE).
+    Test get_events passes a single category filter to the API as a query parameter.
     """
-    events = [
-        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
-        {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
-        {"date": "2024-01-02", "id": "e3", "name": "Christmas", "category": "HOLIDAY"},
-    ]
+    captured_kwargs: dict = {}
 
-    async def fake_request(*_args, **_kwargs):
-        return events
+    async def fake_request(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return [{"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"}]
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
@@ -164,48 +161,41 @@ def test_get_events_filter_by_single_category(monkeypatch):
         get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="NOTE")
     )
     assert "Block 1" in result
-    assert "Workout A" not in result
-    assert "Christmas" not in result
+    assert captured_kwargs["params"]["category"] == "NOTE"
 
 
 def test_get_events_filter_by_multiple_categories(monkeypatch):
     """
-    Test get_events filters events by multiple comma-separated categories.
+    Test get_events passes multiple comma-separated categories to the API as a query parameter.
     """
-    events = [
-        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
-        {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
-        {"date": "2024-01-02", "id": "e3", "name": "Christmas", "category": "HOLIDAY"},
-        {"date": "2024-01-03", "id": "e4", "name": "Spring Race", "category": "RACE"},
-    ]
+    captured_kwargs: dict = {}
 
-    async def fake_request(*_args, **_kwargs):
-        return events
+    async def fake_request(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return [
+            {"date": "2024-01-02", "id": "e3", "name": "Christmas", "category": "HOLIDAY"},
+            {"date": "2024-01-03", "id": "e4", "name": "Spring Race", "category": "RACE_A"},
+        ]
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
     result = asyncio.run(
         get_events(
             athlete_id="1", start_date="2024-01-01", end_date="2024-01-03",
-            category="HOLIDAY,RACE",
+            category="HOLIDAY,RACE_A",
         )
     )
     assert "Christmas" in result
     assert "Spring Race" in result
-    assert "Workout A" not in result
-    assert "Block 1" not in result
+    assert captured_kwargs["params"]["category"] == "HOLIDAY,RACE_A"
 
 
 def test_get_events_filter_no_match(monkeypatch):
     """
-    Test get_events returns a no-match message when category filter excludes all events.
+    Test get_events returns a no-match message when API returns no events for the category.
     """
-    events = [
-        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
-    ]
-
     async def fake_request(*_args, **_kwargs):
-        return events
+        return []
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
@@ -213,20 +203,21 @@ def test_get_events_filter_no_match(monkeypatch):
         get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="NOTE")
     )
     assert "No events found" in result
-    assert "NOTE" in result
 
 
 def test_get_events_no_category_returns_all(monkeypatch):
     """
-    Test get_events returns all events when no category filter is provided.
+    Test get_events does not pass a category param when no category filter is provided.
     """
+    captured_kwargs: dict = {}
     events = [
         {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
         {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
         {"date": "2024-01-02", "id": "e3", "name": "Christmas", "category": "HOLIDAY"},
     ]
 
-    async def fake_request(*_args, **_kwargs):
+    async def fake_request(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
         return events
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
@@ -237,19 +228,18 @@ def test_get_events_no_category_returns_all(monkeypatch):
     assert "Workout A" in result
     assert "Block 1" in result
     assert "Christmas" in result
+    assert "category" not in captured_kwargs["params"]
 
 
 def test_get_events_category_case_insensitive(monkeypatch):
     """
-    Test get_events category filter is case-insensitive.
+    Test get_events normalizes category to uppercase before passing to the API.
     """
-    events = [
-        {"date": "2024-01-01", "id": "e1", "name": "Workout A", "category": "WORKOUT"},
-        {"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"},
-    ]
+    captured_kwargs: dict = {}
 
-    async def fake_request(*_args, **_kwargs):
-        return events
+    async def fake_request(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return [{"date": "2024-01-01", "id": "e2", "name": "Block 1", "category": "NOTE"}]
 
     monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
     monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
@@ -257,7 +247,7 @@ def test_get_events_category_case_insensitive(monkeypatch):
         get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="note")
     )
     assert "Block 1" in result
-    assert "Workout A" not in result
+    assert captured_kwargs["params"]["category"] == "NOTE"
 
 
 def test_get_events_invalid_category(monkeypatch):
