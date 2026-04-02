@@ -43,7 +43,8 @@ async def get_wellness_data(
             Valid values: "training", "sport_info", "vital_signs", "sleep",
             "menstrual", "subjective", "nutrition", "activity".
         cadence: Return every Nth day of data (optional). For example, cadence=7
-            returns one entry per week. Must be a positive integer.
+            returns one entry per week. Use 0 (default) to return all entries
+            without cadence filtering. Must be a positive integer when provided.
         include_all_fields: If True, include additional and custom fields beyond the standard set (optional, defaults to False)
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -65,7 +66,7 @@ async def get_wellness_data(
 
     # Validate cadence parameter
     if cadence and cadence < 1:
-        return "Cadence must be a positive integer (1 or greater)."
+        return "Cadence must be a positive integer (1 or greater) when provided. Use 0 to disable cadence filtering."
 
     # Call the Intervals.icu API
     params = {"oldest": start_date, "newest": end_date}
