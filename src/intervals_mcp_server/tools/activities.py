@@ -246,94 +246,50 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
 
 
 @mcp.tool()
-async def get_activity_power_histogram(
+async def get_activity_histogram(
     activity_id: str,
-    bucket_size: int = 10,
+    histogram_type: str,
+    bucket_size: int | None = None,
     api_key: str | None = None,
 ) -> str:
-    """Get power histogram data for a specific activity from Intervals.icu.
+    """Get histogram data for a specific activity from Intervals.icu.
 
     Intended for in-depth analysis of a single activity. Avoid calling this tool
     for a large number of activities at once to prevent excessive token usage.
 
     Args:
         activity_id: The Intervals.icu activity ID
-        bucket_size: Width of each power bucket in watts (optional, defaults to 10)
+        histogram_type: Type of histogram to retrieve. One of: "power", "hr", "pace"
+        bucket_size: Width of each bucket (optional). For power: watts (defaults to 10),
+                     for hr: bpm (defaults to 5). Not used for pace.
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/power-histogram",
-        api_key=api_key,
-        params={"bucketSize": bucket_size},
-    )
+    valid_types = {"power", "hr", "pace"}
+    if histogram_type not in valid_types:
+        return f"Invalid histogram_type '{histogram_type}'. Must be one of: {', '.join(sorted(valid_types))}."
+
+    endpoint_map = {
+        "power": "power-histogram",
+        "hr": "hr-histogram",
+        "pace": "pace-histogram",
+    }
+    default_bucket_sizes = {"power": 10, "hr": 5}
+
+    url = f"/activity/{activity_id}/{endpoint_map[histogram_type]}"
+
+    params: dict[str, Any] | None = None
+    if histogram_type != "pace":
+        bucket = bucket_size if bucket_size is not None else default_bucket_sizes[histogram_type]
+        params = {"bucketSize": bucket}
+
+    result = await make_intervals_request(url=url, api_key=api_key, params=params)
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
-        return f"Error fetching power histogram: {error_message}"
+        return f"Error fetching {histogram_type} histogram: {error_message}"
 
     if not result:
-        return f"No power histogram data found for activity {activity_id}."
-
-    return json.dumps(result)
-
-
-@mcp.tool()
-async def get_activity_hr_histogram(
-    activity_id: str,
-    bucket_size: int = 5,
-    api_key: str | None = None,
-) -> str:
-    """Get heart rate histogram data for a specific activity from Intervals.icu.
-
-    Intended for in-depth analysis of a single activity. Avoid calling this tool
-    for a large number of activities at once to prevent excessive token usage.
-
-    Args:
-        activity_id: The Intervals.icu activity ID
-        bucket_size: Width of each heart rate bucket in bpm (optional, defaults to 5)
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/hr-histogram",
-        api_key=api_key,
-        params={"bucketSize": bucket_size},
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching heart rate histogram: {error_message}"
-
-    if not result:
-        return f"No heart rate histogram data found for activity {activity_id}."
-
-    return json.dumps(result)
-
-
-@mcp.tool()
-async def get_activity_pace_histogram(
-    activity_id: str,
-    api_key: str | None = None,
-) -> str:
-    """Get pace histogram data for a specific activity from Intervals.icu.
-
-    Intended for in-depth analysis of a single activity. Avoid calling this tool
-    for a large number of activities at once to prevent excessive token usage.
-
-    Args:
-        activity_id: The Intervals.icu activity ID
-        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-    """
-    result = await make_intervals_request(
-        url=f"/activity/{activity_id}/pace-histogram",
-        api_key=api_key,
-    )
-
-    if isinstance(result, dict) and "error" in result:
-        error_message = result.get("message", "Unknown error")
-        return f"Error fetching pace histogram: {error_message}"
-
-    if not result:
-        return f"No pace histogram data found for activity {activity_id}."
+        return f"No {histogram_type} histogram data found for activity {activity_id}."
 
     return json.dumps(result)
 
