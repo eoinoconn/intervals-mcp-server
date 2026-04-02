@@ -6,6 +6,7 @@ This module handles transport configuration and server startup logic.
 
 import os
 import logging
+import warnings
 
 from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 
@@ -40,6 +41,14 @@ def setup_transport() -> TransportAliases:
         if transport_alias == TransportAliases.HTTP
         else transport_alias
     )
+
+    if selected_transport == TransportAliases.SSE:
+        warnings.warn(
+            "SSE transport is deprecated and will be removed in a future release. "
+            "Use MCP_TRANSPORT=http (Streamable HTTP) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     return selected_transport
 
