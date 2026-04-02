@@ -260,6 +260,39 @@ def test_get_events_category_case_insensitive(monkeypatch):
     assert "Workout A" not in result
 
 
+def test_get_events_invalid_category(monkeypatch):
+    """
+    Test get_events returns an error when an invalid category is provided.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="INVALID")
+    )
+    assert "Error: Invalid event category" in result
+    assert "INVALID" in result
+    assert "WORKOUT" in result
+
+
+def test_get_events_mixed_valid_and_invalid_category(monkeypatch):
+    """
+    Test get_events returns an error when a mix of valid and invalid categories is provided.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_events(athlete_id="1", start_date="2024-01-01", end_date="2024-01-02", category="NOTE,BOGUS")
+    )
+    assert "Error: Invalid event category" in result
+    assert "BOGUS" in result
+
+
 def test_get_event_by_id(monkeypatch):
     """
     Test get_event_by_id returns a formatted string with event details for a given event ID.

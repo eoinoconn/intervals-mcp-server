@@ -20,6 +20,9 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
+# Known event categories from the Intervals.icu API
+VALID_EVENT_CATEGORIES: set[str] = {"WORKOUT", "RACE", "NOTE", "HOLIDAY", "TARGET", "GAP_TARGET"}
+
 
 def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     name: str,
@@ -106,7 +109,8 @@ async def get_events(
         compact: If True, return a brief one-line-per-event summary to save tokens (optional, defaults to True)
         category: Filter events by category. Comma-separated list of categories to include
             (e.g. "NOTE", "HOLIDAY,RACE", "WORKOUT,NOTE"). Valid categories: WORKOUT, RACE,
-            NOTE, HOLIDAY, TARGET. If not provided, all events are returned.
+            NOTE, HOLIDAY, TARGET, GAP_TARGET. Returns an error if an invalid category is
+            provided. If not provided, all events are returned.
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -123,6 +127,12 @@ async def get_events(
     category_filter: set[str] | None = None
     if category:
         category_filter = {c.strip().upper() for c in category.split(",")}
+        invalid = category_filter - VALID_EVENT_CATEGORIES
+        if invalid:
+            return (
+                f"Error: Invalid event category: {', '.join(sorted(invalid))}. "
+                f"Valid categories are: {', '.join(sorted(VALID_EVENT_CATEGORIES))}."
+            )
 
     # Call the Intervals.icu API
     params = {"oldest": start_date, "newest": end_date}
