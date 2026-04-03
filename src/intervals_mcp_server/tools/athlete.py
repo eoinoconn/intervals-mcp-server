@@ -8,6 +8,8 @@ such as training zone definitions.
 import json
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.validation import resolve_athlete_id
@@ -237,7 +239,7 @@ def _extract_sport_zones(setting: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Athlete Zones", readOnlyHint=True, destructiveHint=False))
 async def get_athlete_zones(
     athlete_id: str = "",
     api_key: str = "",

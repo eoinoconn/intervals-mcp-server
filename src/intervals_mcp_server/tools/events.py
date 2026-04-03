@@ -8,6 +8,8 @@ import json
 from datetime import datetime
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
@@ -105,7 +107,7 @@ async def _delete_events_list(
     return failed_events
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Events", readOnlyHint=True, destructiveHint=False))
 async def get_events(
     athlete_id: str = "",
     api_key: str = "",
@@ -185,7 +187,7 @@ async def get_events(
     return events_summary
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Event by ID", readOnlyHint=True, destructiveHint=False))
 async def get_event_by_id(
     event_id: str,
     athlete_id: str = "",
@@ -222,7 +224,7 @@ async def get_event_by_id(
     return format_event_details(result)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Delete Event", readOnlyHint=False, destructiveHint=True))
 async def delete_event(
     event_id: str,
     athlete_id: str = "",
@@ -271,7 +273,7 @@ async def _fetch_events_for_deletion(
     return events, None
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Delete Events by Date Range", readOnlyHint=False, destructiveHint=True))
 async def delete_events_by_date_range(
     start_date: str,
     end_date: str,
@@ -301,7 +303,7 @@ async def delete_events_by_date_range(
     return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Add or Update Event", readOnlyHint=False, destructiveHint=False))
 async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     workout_type: str,
     name: str,

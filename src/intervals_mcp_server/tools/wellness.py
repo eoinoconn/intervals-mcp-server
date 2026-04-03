@@ -4,6 +4,8 @@ Wellness-related MCP tools for Intervals.icu.
 This module contains tools for retrieving athlete wellness data.
 """
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
@@ -18,7 +20,7 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 config = get_config()
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Wellness Data", readOnlyHint=True, destructiveHint=False))
 async def get_wellness_data(
     athlete_id: str = "",
     api_key: str = "",
