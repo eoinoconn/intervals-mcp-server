@@ -22,6 +22,24 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
 
+# Known event categories from the Intervals.icu API
+VALID_EVENT_CATEGORIES: set[str] = {
+    "WORKOUT",
+    "RACE_A",
+    "RACE_B",
+    "RACE_C",
+    "NOTE",
+    "PLAN",
+    "HOLIDAY",
+    "SICK",
+    "INJURED",
+    "SET_EFTP",
+    "FITNESS_DAYS",
+    "SEASON_START",
+    "TARGET",
+    "SET_FITNESS",
+}
+
 
 def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     name: str,
@@ -96,6 +114,7 @@ async def get_events(
     start_date: str = "",
     end_date: str = "",
     compact: bool = True,
+    category: str = "",
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -105,6 +124,11 @@ async def get_events(
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
         compact: If True, return a brief one-line-per-event summary to save tokens (optional, defaults to True)
+        category: Filter events by category. Comma-separated list of categories to include
+            (e.g. "NOTE", "HOLIDAY,RACE_A", "WORKOUT,NOTE"). Valid categories: WORKOUT,
+            RACE_A, RACE_B, RACE_C, NOTE, PLAN, HOLIDAY, SICK, INJURED, SET_EFTP,
+            FITNESS_DAYS, SEASON_START, TARGET, SET_FITNESS. Returns an error if an invalid
+            category is provided. If not provided, all events are returned.
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -117,8 +141,22 @@ async def get_events(
     if not end_date:
         end_date = get_default_future_end_date()
 
+    # Parse category filter
+    category_filter: str | None = None
+    if category:
+        parsed = {c.strip().upper() for c in category.split(",")}
+        invalid = parsed - VALID_EVENT_CATEGORIES
+        if invalid:
+            return (
+                f"Error: Invalid event category: {', '.join(sorted(invalid))}. "
+                f"Valid categories are: {', '.join(sorted(VALID_EVENT_CATEGORIES))}."
+            )
+        category_filter = ",".join(sorted(parsed))
+
     # Call the Intervals.icu API
-    params = {"oldest": start_date, "newest": end_date}
+    params: dict[str, str] = {"oldest": start_date, "newest": end_date}
+    if category_filter:
+        params["category"] = category_filter
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
