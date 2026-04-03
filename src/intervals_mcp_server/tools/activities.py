@@ -7,6 +7,8 @@ This module contains tools for retrieving and managing athlete activities.
 from datetime import datetime
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
@@ -111,7 +113,7 @@ def _format_activities_response(
     return activities_summary
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Activities", readOnlyHint=True, destructiveHint=False))
 async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-statements,too-many-branches,too-many-positional-arguments
     athlete_id: str = "",
     api_key: str = "",
@@ -175,7 +177,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     return _format_activities_response(activities, athlete_id_to_use, include_unnamed, compact)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Activity Details", readOnlyHint=True, destructiveHint=False))
 async def get_activity_details(activity_id: str, api_key: str = "") -> str:
     """Get detailed information for a specific activity from Intervals.icu
 
@@ -216,7 +218,7 @@ async def get_activity_details(activity_id: str, api_key: str = "") -> str:
     return detailed_view
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Activity Intervals", readOnlyHint=True, destructiveHint=False))
 async def get_activity_intervals(activity_id: str, api_key: str = "") -> str:
     """Get interval data for a specific activity from Intervals.icu
 
@@ -256,7 +258,7 @@ async def get_activity_intervals(activity_id: str, api_key: str = "") -> str:
     return ignore_flags_text + format_intervals(result)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Activity Streams", readOnlyHint=True, destructiveHint=False))
 async def get_activity_streams(
     activity_id: str,
     api_key: str = "",
@@ -334,7 +336,7 @@ async def get_activity_streams(
     return streams_summary
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Activity Messages", readOnlyHint=True, destructiveHint=False))
 async def get_activity_messages(activity_id: str, api_key: str = "") -> str:
     """Get messages (notes/comments) for a specific activity from Intervals.icu
 
@@ -366,7 +368,7 @@ async def get_activity_messages(activity_id: str, api_key: str = "") -> str:
     return output
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Add Activity Message", readOnlyHint=False, destructiveHint=False))
 async def add_activity_message(
     activity_id: str,
     content: str,

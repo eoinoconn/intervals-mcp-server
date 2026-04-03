@@ -7,6 +7,8 @@ This module contains tools for managing athlete custom items (charts, fields, zo
 import json
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_custom_item_details
@@ -18,7 +20,7 @@ from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 config = get_config()
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Custom Items", readOnlyHint=True, destructiveHint=False))
 async def get_custom_items(
     athlete_id: str = "",
     api_key: str = "",
@@ -55,7 +57,7 @@ async def get_custom_items(
     return output
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Custom Item by ID", readOnlyHint=True, destructiveHint=False))
 async def get_custom_item_by_id(
     item_id: int,
     athlete_id: str = "",
@@ -85,7 +87,7 @@ async def get_custom_item_by_id(
     return format_custom_item_details(result)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Create Custom Item", readOnlyHint=False, destructiveHint=False))
 async def create_custom_item(
     name: str,
     item_type: str,
@@ -141,7 +143,7 @@ async def create_custom_item(
     return f"Successfully created custom item:\n\n{format_custom_item_details(result)}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Update Custom Item", readOnlyHint=False, destructiveHint=False))
 async def update_custom_item(
     item_id: int,
     athlete_id: str = "",
@@ -203,7 +205,7 @@ async def update_custom_item(
     return f"Successfully updated custom item:\n\n{format_custom_item_details(result)}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Delete Custom Item", readOnlyHint=False, destructiveHint=True))
 async def delete_custom_item(
     item_id: int,
     athlete_id: str = "",
