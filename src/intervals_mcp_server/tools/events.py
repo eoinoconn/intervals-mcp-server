@@ -288,8 +288,8 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         name: Name of the activity
         workout_doc: steps as a list of Step objects (optional, but necessary to define workout steps)
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
-        moving_time: Total expected moving time of the workout in seconds (optional)
-        distance: Total expected distance of the workout in meters (optional)
+        moving_time: Total expected moving time of the workout in seconds (optional). Use 0 (default) to omit from the request; 0 will not be transmitted to the API.
+        distance: Total expected distance of the workout in meters (optional). Use 0 (default) to omit from the request; 0 will not be transmitted to the API.
 
     Example:
         "workout_doc": {

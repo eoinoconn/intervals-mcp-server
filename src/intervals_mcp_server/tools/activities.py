@@ -4,6 +4,7 @@ Activity-related MCP tools for Intervals.icu.
 This module contains tools for retrieving and managing athlete activities.
 """
 
+from datetime import datetime
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
@@ -67,13 +68,22 @@ def _filter_activities_by_date(
     Returns:
         Filtered list of activities within the date range.
     """
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        return activities  # Can't filter if boundary dates are invalid
+
     filtered: list[dict[str, Any]] = []
     for activity in activities:
         raw = activity.get("start_date_local") or activity.get("startTime") or activity.get("start_date", "")
         if not raw:
             continue
-        activity_date = str(raw)[:10]  # extract YYYY-MM-DD portion
-        if start_date <= activity_date <= end_date:
+        try:
+            activity_date = datetime.strptime(str(raw)[:10], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if start_dt <= activity_date <= end_dt:
             filtered.append(activity)
     return filtered
 
