@@ -22,5 +22,7 @@ COPY .env.example .env.example
 # Install the package and runtime dependencies
 RUN pip install --no-cache-dir .
 
-# Default command to run the MCP server using stdio transport
+# Default command to run the MCP server using stdio transport.
+# For remote deployments, override with Streamable HTTP transport:
+#   docker run -e MCP_TRANSPORT=http -e FASTMCP_PORT=8765 -p 8765:8765 ...
 CMD ["mcp", "run", "src/intervals_mcp_server/server.py"]

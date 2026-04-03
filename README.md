@@ -172,26 +172,32 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 
 ## Usage with ChatGPT
 
-ChatGPT’s beta MCP connectors can also talk to this server over the SSE transport.
+ChatGPT’s beta MCP connectors can talk to this server over a remote transport.
+The recommended transport is **Streamable HTTP** (`MCP_TRANSPORT=http`).
 
-1. Start the server in SSE mode so it exposes the `/sse` and `/messages/` endpoints:
+1. Start the server in Streamable HTTP mode:
 
    ```bash
-   export FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8765 MCP_TRANSPORT=sse FASTMCP_LOG_LEVEL=INFO
+   export FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8765 MCP_TRANSPORT=http FASTMCP_LOG_LEVEL=INFO
    python src/intervals_mcp_server/server.py
    ```
 
-   The startup log prints the full URLs (for example `http://127.0.0.1:8765/sse`). ChatGPT needs that public URL, so forward the port with a tool such as `ngrok http 8765` if you are not exposing the server directly.
+   The startup log prints the full URL (for example `http://127.0.0.1:8765/mcp`). ChatGPT needs a publicly reachable URL, so forward the port with a tool such as `ngrok http 8765` if you are not exposing the server directly.
 
 2. In ChatGPT, open **Settings → Features → Custom MCP Connectors** and click **Add**. Fill in:
 
    - **Name**: `Intervals.icu`
-   - **MCP Server URL**: `https://<your-public-host>/sse`
+   - **MCP Server URL**: `https://<your-public-host>/mcp`
    - **Authentication**: leave as _No authentication_ unless you have protected your tunnel.
 
    You can reuse the same `ngrok http 8765` tunnel URL here; just ensure it forwards to the host/port you exported above.
 
-3. Save the connector and open a new chat. ChatGPT will keep the SSE connection open and POST follow-up requests to the `/messages/` endpoint announced by the server. If you restart the MCP server or tunnel, rerun the SSE command and update the connector URL if it changes.
+3. Save the connector and open a new chat. If you restart the MCP server or tunnel, rerun the command and update the connector URL if it changes.
+
+> **Legacy SSE transport** — SSE (`MCP_TRANSPORT=sse`) is still supported but deprecated.
+> Anthropic’s Software Directory Policy now requires Streamable HTTP for remote
+> MCP servers. If you have an existing SSE setup you can continue using it
+> temporarily, but please migrate to Streamable HTTP (`MCP_TRANSPORT=http`).
 
 ## Development and testing
 
