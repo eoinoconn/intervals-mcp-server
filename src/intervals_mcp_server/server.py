@@ -23,27 +23,34 @@ Usage:
     MCP tools provided:
         - get_activities
         - get_activity_details
-        - get_events
-        - get_event_by_id
-        - get_wellness_data
         - get_activity_intervals
         - get_activity_streams
-        - add_events
+        - get_activity_messages
+        - add_activity_message
+        - get_events
+        - get_event_by_id
+        - add_or_update_event
+        - delete_event
+        - delete_events_by_date_range
+        - get_wellness_data
+        - get_custom_items
+        - get_custom_item_by_id
+        - create_custom_item
+        - update_custom_item
+        - delete_custom_item
 
     See the README for more details on configuration and usage.
 """
 
 import logging
 
-from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
-
 # Import API client and configuration
 from intervals_mcp_server.api.client import (
     httpx_client,  # Re-export for backward compatibility with tests
     make_intervals_request,
-    setup_api_client,
 )
 from intervals_mcp_server.config import get_config
+from intervals_mcp_server.mcp_instance import mcp
 
 # Import types and validation
 from intervals_mcp_server.server_setup import setup_transport, start_server
@@ -60,20 +67,15 @@ logger = logging.getLogger("intervals_icu_mcp_server")
 # Get configuration instance
 config = get_config()
 
-# Initialize FastMCP server with custom lifespan
-mcp = FastMCP("intervals-icu", lifespan=setup_api_client)
-
-# Set the shared mcp instance for tool modules to use (breaks cyclic imports)
-from intervals_mcp_server import mcp_instance  # pylint: disable=wrong-import-position  # noqa: E402
-
-mcp_instance.mcp = mcp
-
 # Import tool modules to register them (tools register themselves via @mcp.tool() decorators)
 # Import tool functions for re-export
+from intervals_mcp_server.tools.training_summary import get_training_summary  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.activities import (  # pylint: disable=wrong-import-position  # noqa: E402
+    add_activity_message,
     get_activities,
     get_activity_details,
     get_activity_intervals,
+    get_activity_messages,
     get_activity_streams,
 )
 from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-position  # noqa: E402
@@ -86,7 +88,6 @@ from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-
 from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.athlete import get_athlete_zones  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.power_curves import get_athlete_power_curves  # pylint: disable=wrong-import-position  # noqa: E402
-from intervals_mcp_server.tools.training_summary import get_training_summary  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-import-position  # noqa: E402
     create_custom_item,
     delete_custom_item,
@@ -103,9 +104,11 @@ from intervals_mcp_server.resources.guide import coaching_context_protocol  # py
 __all__ = [
     "make_intervals_request",
     "httpx_client",  # Re-exported for test compatibility
+    "add_activity_message",
     "get_activities",
     "get_activity_details",
     "get_activity_intervals",
+    "get_activity_messages",
     "get_activity_streams",
     "get_events",
     "get_event_by_id",

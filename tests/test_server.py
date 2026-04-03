@@ -4,11 +4,14 @@ Unit tests for the main MCP server tool functions in intervals_mcp_server.server
 These tests use monkeypatching to mock API responses and verify the formatting and output of each tool function:
 - get_activities
 - get_activity_details
-- get_events
-- get_event_by_id
-- get_wellness_data
 - get_activity_intervals
 - get_activity_streams
+- get_activity_messages
+- add_activity_message
+- get_events
+- get_event_by_id
+- add_or_update_event
+- get_wellness_data
 
 The tests ensure that the server's public API returns expected strings and handles data correctly.
 """
@@ -24,16 +27,18 @@ os.environ.setdefault("API_KEY", "test")
 os.environ.setdefault("ATHLETE_ID", "i1")
 
 from intervals_mcp_server.server import (  # pylint: disable=wrong-import-position
+    add_activity_message,
+    add_or_update_event,
     get_activities,
     get_activity_details,
-    get_events,
-    get_event_by_id,
-    get_wellness_data,
     get_activity_intervals,
+    get_activity_messages,
     get_activity_streams,
-    add_or_update_event,
     get_athlete_power_curves,
     get_athlete_zones,
+    get_event_by_id,
+    get_events,
+    get_wellness_data,
     get_custom_items,
     get_custom_item_by_id,
     create_custom_item,
@@ -64,7 +69,7 @@ def test_get_activities(monkeypatch):
     monkeypatch.setattr(
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
-    result = asyncio.run(get_activities(athlete_id="1", limit=1, include_unnamed=True))
+    result = asyncio.run(get_activities(athlete_id="1", start_date="2024-01-01", end_date="2024-01-01", limit=1, include_unnamed=True))
     assert "Morning Ride" in result
     assert "Activities:" in result
 
@@ -120,6 +125,63 @@ def test_get_activity_details_with_compliance(monkeypatch):
     assert "Workout Compliance:" in result
     assert "Paired Event ID: 789" in result
     assert "Compliance: 92.00%" in result
+
+
+def test_get_activity_details_with_ignore_flags(monkeypatch):
+    """
+    Test get_activity_details includes data ignore flags when they are True.
+    """
+    sample = {
+        "name": "Indoor Ride",
+        "id": 789,
+        "type": "Ride",
+        "startTime": "2024-07-01T09:00:00Z",
+        "distance": 30000,
+        "duration": 3600,
+        "icu_ignore_time": True,
+        "icu_ignore_power": True,
+        "icu_ignore_hr": False,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_details(789))
+    assert "Data Flags:" in result
+    assert "Ignore Time: True" in result
+    assert "Ignore Power: True" in result
+    assert "Ignore HR" not in result
+
+
+def test_get_activity_details_no_ignore_flags(monkeypatch):
+    """
+    Test get_activity_details omits Data Flags section when all flags are False.
+    """
+    sample = {
+        "name": "Normal Ride",
+        "id": 101,
+        "type": "Ride",
+        "startTime": "2024-08-01T10:00:00Z",
+        "distance": 50000,
+        "duration": 7200,
+        "icu_ignore_time": False,
+        "icu_ignore_power": False,
+        "icu_ignore_hr": False,
+    }
+
+    async def fake_request(*_args, **_kwargs):
+        return sample
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_details(101))
+    assert "Data Flags:" not in result
 
 
 def test_get_events(monkeypatch):
@@ -381,8 +443,34 @@ def test_get_wellness_data_cadence_invalid(monkeypatch):
     """
     Test that cadence < 1 returns an error message.
     """
-    result = asyncio.run(get_wellness_data(athlete_id="1", cadence=0))
+    result = asyncio.run(get_wellness_data(athlete_id="1", cadence=-1))
     assert "Cadence must be a positive integer" in result
+
+
+def test_get_wellness_data_include_all_fields(monkeypatch):
+    """
+    Test get_wellness_data with include_all_fields=True returns a formatted string including additional fields.
+    """
+    wellness = [
+        {
+            "id": "2024-01-01",
+            "ctl": 75,
+            "sleepSecs": 28800,
+            "customField": "custom_value",
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return wellness
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.wellness.make_intervals_request", fake_request)
+    result = asyncio.run(get_wellness_data(athlete_id="1", include_all_fields=True))
+    assert "Wellness Data:" in result
+    assert "2024-01-01" in result
+    assert "Fitness (CTL): 75" in result
+    assert "Other Fields:" in result
+    assert "customField: custom_value" in result
 
 
 def test_get_activity_intervals(monkeypatch):
@@ -401,6 +489,62 @@ def test_get_activity_intervals(monkeypatch):
     result = asyncio.run(get_activity_intervals("123"))
     assert "Intervals Analysis:" in result
     assert "Rep 1" in result
+
+
+def test_get_activity_intervals_with_ignore_flags(monkeypatch):
+    """
+    Test get_activity_intervals includes data ignore flags when the activity has them set to True.
+    """
+    activity_data = {
+        "id": "i1",
+        "icu_ignore_time": True,
+        "icu_ignore_power": False,
+        "icu_ignore_hr": True,
+    }
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", _args[0] if _args else "")
+        if "/intervals" in str(url):
+            return INTERVALS_DATA
+        return activity_data
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_intervals("i1"))
+    assert "Data Flags:" in result
+    assert "Ignore Time: True" in result
+    assert "Ignore HR: True" in result
+    assert "Ignore Power" not in result
+    assert "Intervals Analysis:" in result
+    assert "Rep 1" in result
+
+
+def test_get_activity_intervals_no_ignore_flags(monkeypatch):
+    """
+    Test get_activity_intervals omits Data Flags section when all flags are False.
+    """
+    activity_data = {
+        "id": "i1",
+        "icu_ignore_time": False,
+        "icu_ignore_power": False,
+        "icu_ignore_hr": False,
+    }
+
+    async def fake_request(*_args, **kwargs):
+        url = kwargs.get("url", _args[0] if _args else "")
+        if "/intervals" in str(url):
+            return INTERVALS_DATA
+        return activity_data
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_intervals("i1"))
+    assert "Data Flags:" not in result
+    assert "Intervals Analysis:" in result
 
 
 def test_get_activity_streams(monkeypatch):
@@ -483,6 +627,128 @@ def test_add_or_update_event(monkeypatch):
     )
     assert "Successfully created event id:" in result
     assert "e123" in result
+
+
+def test_get_activity_messages(monkeypatch):
+    """Test get_activity_messages returns formatted messages for an activity."""
+    sample_messages = [
+        {
+            "id": 1,
+            "name": "Niko",
+            "created": "2024-06-15T10:30:00Z",
+            "type": "NOTE",
+            "content": "Legs felt heavy today",
+        },
+        {
+            "id": 2,
+            "name": "Coach",
+            "created": "2024-06-15T11:00:00Z",
+            "type": "TEXT",
+            "content": "Good effort despite that!",
+        },
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample_messages
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_messages(activity_id="i123"))
+    assert "Legs felt heavy today" in result
+    assert "Good effort despite that!" in result
+    assert "Niko" in result
+    assert "Coach" in result
+
+
+def test_get_activity_messages_error(monkeypatch):
+    """Test get_activity_messages handles API errors gracefully."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Activity not found"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_messages(activity_id="i999"))
+    assert "Error fetching activity messages" in result
+    assert "Activity not found" in result
+
+
+def test_get_activity_messages_empty(monkeypatch):
+    """Test get_activity_messages returns appropriate message when no messages exist."""
+
+    async def fake_request(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(get_activity_messages(activity_id="i123"))
+    assert "No messages found" in result
+
+
+def test_add_activity_message(monkeypatch):
+    """Test add_activity_message posts a message and returns confirmation."""
+
+    async def fake_request(*_args, **kwargs):
+        assert kwargs.get("method") == "POST"
+        assert kwargs.get("data") == {"content": "Great run!"}
+        return {"id": 42, "new_chat": None}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i123", content="Great run!"))
+    assert "Successfully added message" in result
+    assert "42" in result
+
+
+def test_add_activity_message_missing_id(monkeypatch):
+    """Test add_activity_message warns when response has no ID."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"new_chat": None}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i123", content="Hello"))
+    assert "appears to have been added" in result
+    assert "verify manually" in result
+
+
+def test_add_activity_message_unexpected_response(monkeypatch):
+    """Test add_activity_message handles unexpected non-dict response."""
+
+    async def fake_request(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i123", content="Hello"))
+    assert "Unexpected response" in result
+
+
+def test_add_activity_message_error(monkeypatch):
+    """Test add_activity_message handles API errors."""
+
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Not found"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    result = asyncio.run(add_activity_message(activity_id="i999", content="Hello"))
+    assert "Error adding message" in result
 
 
 def test_get_athlete_power_curves(monkeypatch):
@@ -1038,7 +1304,7 @@ def test_get_athlete_zones_no_athlete_id(monkeypatch):
     config_module._config_instance = config_module.load_config()
 
     try:
-        result = asyncio.run(get_athlete_zones(athlete_id=None))
+        result = asyncio.run(get_athlete_zones(athlete_id=""))
         assert "Error" in result or "No athlete ID" in result
     finally:
         config_module._config_instance = original

@@ -22,7 +22,7 @@ logger = logging.getLogger("intervals_icu_mcp_server")
 
 # Create a single AsyncClient instance for all requests (lazily initialized)
 # This can be monkeypatched via server.httpx_client for testing
-httpx_client: httpx.AsyncClient | None = None
+httpx_client: httpx.AsyncClient | None = None  # pylint: disable=invalid-name
 
 
 async def _get_httpx_client() -> httpx.AsyncClient:
@@ -117,7 +117,7 @@ def _prepare_request_config(
         headers["Content-Type"] = "application/json"
 
     # Use provided api_key or fall back to global API_KEY
-    key_to_use = api_key if api_key is not None else config.api_key
+    key_to_use = api_key if api_key else config.api_key
     if not key_to_use:
         logger.error("No API key provided for request to: %s", url)
         return (

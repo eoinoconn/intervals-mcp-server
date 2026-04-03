@@ -4,16 +4,19 @@ Activity-related MCP tools for Intervals.icu.
 This module contains tools for retrieving and managing athlete activities.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
+    format_activity_message,
     format_activity_compact,
     format_activity_summary,
+    format_ignore_flags,
     format_intervals,
 )
+
 from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_date_params
 
 # Import mcp instance from shared module for tool registration
@@ -50,34 +53,39 @@ def _filter_named_activities(activities: list[dict[str, Any]]) -> list[dict[str,
     ]
 
 
-async def _fetch_more_activities(
-    athlete_id: str,
+def _filter_activities_by_date(
+    activities: list[dict[str, Any]],
     start_date: str,
-    api_key: str | None,
-    api_limit: int,
+    end_date: str,
 ) -> list[dict[str, Any]]:
-    """Fetch additional activities from an earlier date range."""
-    oldest_date = datetime.fromisoformat(start_date)
-    older_start_date = (oldest_date - timedelta(days=60)).strftime("%Y-%m-%d")
-    older_end_date = (oldest_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    """Filter activities to only include those within the specified date range.
 
-    if older_start_date >= older_end_date:
-        return []
+    Args:
+        activities: List of activity dictionaries.
+        start_date: Start date in YYYY-MM-DD format (inclusive).
+        end_date: End date in YYYY-MM-DD format (inclusive).
 
-    more_params = {
-        "oldest": older_start_date,
-        "newest": older_end_date,
-        "limit": api_limit,
-    }
-    more_result = await make_intervals_request(
-        url=f"/athlete/{athlete_id}/activities",
-        api_key=api_key,
-        params=more_params,
-    )
+    Returns:
+        Filtered list of activities within the date range.
+    """
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError:
+        return activities  # Can't filter if boundary dates are invalid
 
-    if isinstance(more_result, list):
-        return _filter_named_activities(more_result)
-    return []
+    filtered: list[dict[str, Any]] = []
+    for activity in activities:
+        raw = activity.get("start_date_local") or activity.get("startTime") or activity.get("start_date", "")
+        if not raw:
+            continue
+        try:
+            activity_date = datetime.strptime(str(raw)[:10], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if start_dt <= activity_date <= end_dt:
+            filtered.append(activity)
+    return filtered
 
 
 def _format_activities_response(
@@ -105,10 +113,10 @@ def _format_activities_response(
 
 @mcp.tool()
 async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-statements,too-many-branches,too-many-positional-arguments
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    start_date: str = "",
+    end_date: str = "",
     limit: int = 10,
     include_unnamed: bool = False,
     compact: bool = True,
@@ -154,16 +162,12 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     if not activities:
         return f"No valid activities found for athlete {athlete_id_to_use} in the specified date range."
 
+    # Filter activities to the requested date range
+    activities = _filter_activities_by_date(activities, start_date, end_date)
+
     # Filter and fetch more if needed
     if not include_unnamed:
         activities = _filter_named_activities(activities)
-
-        # If we don't have enough named activities, try to fetch more
-        if len(activities) < limit:
-            more_activities = await _fetch_more_activities(
-                athlete_id_to_use, start_date, api_key, api_limit
-            )
-            activities.extend(more_activities)
 
     # Limit to requested count
     activities = activities[:limit]
@@ -172,7 +176,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
 
 
 @mcp.tool()
-async def get_activity_details(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_details(activity_id: str, api_key: str = "") -> str:
     """Get detailed information for a specific activity from Intervals.icu
 
     Args:
@@ -213,7 +217,7 @@ async def get_activity_details(activity_id: str, api_key: str | None = None) -> 
 
 
 @mcp.tool()
-async def get_activity_intervals(activity_id: str, api_key: str | None = None) -> str:
+async def get_activity_intervals(activity_id: str, api_key: str = "") -> str:
     """Get interval data for a specific activity from Intervals.icu
 
     This endpoint returns detailed metrics for each interval in an activity, including power, heart rate,
@@ -240,15 +244,23 @@ async def get_activity_intervals(activity_id: str, api_key: str | None = None) -
     ):
         return f"No interval data or unrecognized format for activity {activity_id}."
 
+    # Fetch activity details to get ignore flags
+    ignore_flags_text = ""
+    activity_result = await make_intervals_request(
+        url=f"/activity/{activity_id}", api_key=api_key
+    )
+    if isinstance(activity_result, dict) and "error" not in activity_result:
+        ignore_flags_text = format_ignore_flags(activity_result)
+
     # Format the intervals data
-    return format_intervals(result)
+    return ignore_flags_text + format_intervals(result)
 
 
 @mcp.tool()
 async def get_activity_streams(
     activity_id: str,
-    api_key: str | None = None,
-    stream_types: str | None = None,
+    api_key: str = "",
+    stream_types: str = "",
 ) -> str:
     """Get stream data for a specific activity from Intervals.icu
 
@@ -320,3 +332,68 @@ async def get_activity_streams(
         streams_summary += "\n"
 
     return streams_summary
+
+
+@mcp.tool()
+async def get_activity_messages(activity_id: str, api_key: str = "") -> str:
+    """Get messages (notes/comments) for a specific activity from Intervals.icu
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/messages",
+        api_key=api_key,
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching activity messages: {error_message}"
+
+    if not result:
+        return f"No messages found for activity {activity_id}."
+
+    messages = result if isinstance(result, list) else []
+    if not messages:
+        return f"No messages found for activity {activity_id}."
+
+    output = f"Messages for activity {activity_id}:\n\n"
+    for msg in messages:
+        if isinstance(msg, dict):
+            output += format_activity_message(msg) + "\n\n"
+
+    return output
+
+
+@mcp.tool()
+async def add_activity_message(
+    activity_id: str,
+    content: str,
+    api_key: str = "",
+) -> str:
+    """Add a message (note/comment) to an activity on Intervals.icu
+
+    Args:
+        activity_id: The Intervals.icu activity ID
+        content: The message text to add
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    result = await make_intervals_request(
+        url=f"/activity/{activity_id}/messages",
+        api_key=api_key,
+        method="POST",
+        data={"content": content},
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error adding message to activity: {error_message}"
+
+    if not result or not isinstance(result, dict):
+        return "Error: Unexpected response when adding message."
+
+    msg_id = result.get("id")
+    if msg_id is not None:
+        return f"Successfully added message (ID: {msg_id}) to activity {activity_id}."
+    return f"Message appears to have been added to activity {activity_id}, but no ID was returned. Please verify manually."
