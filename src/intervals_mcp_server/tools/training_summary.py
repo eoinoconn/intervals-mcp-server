@@ -463,10 +463,10 @@ def _build_result(
 
 @mcp.tool(annotations=ToolAnnotations(title="Get Training Summary", readOnlyHint=True, destructiveHint=False))
 async def get_training_summary(
-    start_date: str | None = None,
-    end_date: str | None = None,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    start_date: str = "",
+    end_date: str = "",
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """
     Returns a compact JSON training snapshot for the given date range.
