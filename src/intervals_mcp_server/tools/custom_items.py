@@ -20,8 +20,8 @@ config = get_config()
 
 @mcp.tool()
 async def get_custom_items(
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Get custom items (charts, custom fields, zones, etc.) for an athlete from Intervals.icu
 
@@ -58,8 +58,8 @@ async def get_custom_items(
 @mcp.tool()
 async def get_custom_item_by_id(
     item_id: int,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Get detailed information for a specific custom item from Intervals.icu
 
@@ -89,11 +89,11 @@ async def get_custom_item_by_id(
 async def create_custom_item(
     name: str,
     item_type: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    description: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    description: str = "",
     content: dict[str, Any] | None = None,
-    visibility: str | None = None,
+    visibility: str = "",
 ) -> str:
     """Create a new custom item for an athlete on Intervals.icu
 
@@ -113,7 +113,7 @@ async def create_custom_item(
         return error_msg
 
     data: dict[str, Any] = {"name": name, "type": item_type}
-    if description is not None:
+    if description:
         data["description"] = description
     if content is not None:
         if isinstance(content, str):
@@ -122,7 +122,7 @@ async def create_custom_item(
             except json.JSONDecodeError:
                 return "Error: content must be valid JSON when passed as a string."
         data["content"] = content
-    if visibility is not None:
+    if visibility:
         data["visibility"] = visibility
 
     result = await make_intervals_request(
@@ -144,13 +144,13 @@ async def create_custom_item(
 @mcp.tool()
 async def update_custom_item(
     item_id: int,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    name: str | None = None,
-    item_type: str | None = None,
-    description: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    name: str = "",
+    item_type: str = "",
+    description: str = "",
     content: dict[str, Any] | None = None,
-    visibility: str | None = None,
+    visibility: str = "",
 ) -> str:
     """Update an existing custom item for an athlete on Intervals.icu
 
@@ -171,11 +171,11 @@ async def update_custom_item(
         return error_msg
 
     data: dict[str, Any] = {}
-    if name is not None:
+    if name:
         data["name"] = name
-    if item_type is not None:
+    if item_type:
         data["type"] = item_type
-    if description is not None:
+    if description:
         data["description"] = description
     if content is not None:
         if isinstance(content, str):
@@ -184,7 +184,7 @@ async def update_custom_item(
             except json.JSONDecodeError:
                 return "Error: content must be valid JSON when passed as a string."
         data["content"] = content
-    if visibility is not None:
+    if visibility:
         data["visibility"] = visibility
 
     result = await make_intervals_request(
@@ -206,8 +206,8 @@ async def update_custom_item(
 @mcp.tool()
 async def delete_custom_item(
     item_id: int,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Delete a custom item for an athlete from Intervals.icu
 

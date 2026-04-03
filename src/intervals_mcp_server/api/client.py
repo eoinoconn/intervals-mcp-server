@@ -117,7 +117,7 @@ def _prepare_request_config(
         headers["Content-Type"] = "application/json"
 
     # Use provided api_key or fall back to global API_KEY
-    key_to_use = api_key if api_key is not None else config.api_key
+    key_to_use = api_key if api_key else config.api_key
     if not key_to_use:
         logger.error("No API key provided for request to: %s", url)
         return (

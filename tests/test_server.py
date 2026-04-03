@@ -69,7 +69,7 @@ def test_get_activities(monkeypatch):
     monkeypatch.setattr(
         "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
     )
-    result = asyncio.run(get_activities(athlete_id="1", limit=1, include_unnamed=True))
+    result = asyncio.run(get_activities(athlete_id="1", start_date="2024-01-01", end_date="2024-01-01", limit=1, include_unnamed=True))
     assert "Morning Ride" in result
     assert "Activities:" in result
 
@@ -305,7 +305,7 @@ def test_get_wellness_data_cadence_invalid(monkeypatch):
     """
     Test that cadence < 1 returns an error message.
     """
-    result = asyncio.run(get_wellness_data(athlete_id="1", cadence=0))
+    result = asyncio.run(get_wellness_data(athlete_id="1", cadence=-1))
     assert "Cadence must be a positive integer" in result
 
 
@@ -1166,7 +1166,7 @@ def test_get_athlete_zones_no_athlete_id(monkeypatch):
     config_module._config_instance = config_module.load_config()
 
     try:
-        result = asyncio.run(get_athlete_zones(athlete_id=None))
+        result = asyncio.run(get_athlete_zones(athlete_id=""))
         assert "Error" in result or "No athlete ID" in result
     finally:
         config_module._config_instance = original

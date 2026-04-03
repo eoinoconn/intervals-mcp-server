@@ -239,9 +239,9 @@ def _extract_sport_zones(setting: dict[str, Any]) -> dict[str, Any]:
 
 @mcp.tool()
 async def get_athlete_zones(
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    sport: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    sport: str = "",
 ) -> str:
     """
     Get training zone definitions for an athlete from Intervals.icu.
