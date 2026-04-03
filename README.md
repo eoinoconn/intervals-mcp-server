@@ -165,6 +165,8 @@ Once the server is running and Claude Desktop is configured, you can use the fol
 - `get_activities`: Retrieve a list of activities
 - `get_activity_details`: Get detailed information for a specific activity
 - `get_activity_intervals`: Get detailed interval data for a specific activity
+- `get_activity_streams`: Get time-series stream data (power, HR, cadence, etc.) for a specific activity
+- `get_activity_histogram`: Get a power, heart rate, or pace histogram for a specific activity (pass `histogram_type` as `"power"`, `"hr"`, or `"pace"`)
 - `get_athlete_power_curves`: Get best power output curves for selected durations and time periods
 - `get_wellness_data`: Fetch wellness data
 - `get_events`: Retrieve upcoming events (workouts, races, etc.)
