@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir hatchling
 COPY pyproject.toml pyproject.toml
 COPY src src
 COPY README.md README.md
+COPY .env .env
 
 # Install the package and runtime dependencies
 RUN pip install --no-cache-dir .

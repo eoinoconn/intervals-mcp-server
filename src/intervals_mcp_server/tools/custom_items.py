@@ -10,7 +10,6 @@ from typing import Any
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_custom_item_details
 from intervals_mcp_server.utils.validation import resolve_athlete_id
@@ -37,7 +36,7 @@ async def get_custom_items(
         return error_msg
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item", api_key=get_auth_api_key() or api_key
+        url=f"/athlete/{athlete_id_to_use}/custom-item", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -76,7 +75,7 @@ async def get_custom_item_by_id(
         return error_msg
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}", api_key=get_auth_api_key() or api_key
+        url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -130,7 +129,7 @@ async def create_custom_item(
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item",
-        api_key=get_auth_api_key() or api_key,
+        api_key=api_key,
         data=data,
         method="POST",
     )
@@ -192,7 +191,7 @@ async def update_custom_item(
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=get_auth_api_key() or api_key,
+        api_key=api_key,
         data=data,
         method="PUT",
     )
@@ -225,7 +224,7 @@ async def delete_custom_item(
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/custom-item/{item_id}",
-        api_key=get_auth_api_key() or api_key,
+        api_key=api_key,
         method="DELETE",
     )
 

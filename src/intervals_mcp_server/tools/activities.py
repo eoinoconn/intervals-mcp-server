@@ -11,7 +11,6 @@ from typing import Any
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
     format_activity_message,
@@ -137,7 +136,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         compact: If True, return a brief one-line-per-activity summary to save tokens (optional, defaults to True)
     """
     # Use API key from auth header (OAuth token), explicit parameter, or env var
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
 
     # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -190,7 +189,7 @@ async def get_activity_details(activity_id: str, api_key: str = "") -> str:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
 
     # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key_to_use)
@@ -237,7 +236,7 @@ async def get_activity_intervals(activity_id: str, api_key: str = "") -> str:
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Call the Intervals.icu API
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
     result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key_to_use)
 
     if isinstance(result, dict) and "error" in result:
@@ -303,7 +302,7 @@ async def get_activity_histogram(
         bucket = bucket_size if bucket_size is not None else default_bucket_sizes[histogram_type]
         params = {"bucketSize": bucket}
 
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
     result = await make_intervals_request(url=url, api_key=api_key_to_use, params=params)
 
     if isinstance(result, dict) and "error" in result:
@@ -343,7 +342,7 @@ async def get_activity_streams(
         params["types"] = "time,watts,heartrate,cadence,altitude,distance,velocity_smooth"
 
     # Call the Intervals.icu API
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
     result = await make_intervals_request(
         url=f"/activity/{activity_id}/streams",
         api_key=api_key_to_use,
@@ -403,7 +402,7 @@ async def get_activity_messages(activity_id: str, api_key: str = "") -> str:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
     result = await make_intervals_request(
         url=f"/activity/{activity_id}/messages",
         api_key=api_key_to_use,
@@ -441,7 +440,7 @@ async def add_activity_message(
         content: The message text to add
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
     result = await make_intervals_request(
         url=f"/activity/{activity_id}/messages",
         api_key=api_key_to_use,

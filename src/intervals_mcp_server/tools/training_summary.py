@@ -14,7 +14,6 @@ from typing import Any, TypedDict
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import set_if, strip_nulls
 from intervals_mcp_server.utils.dates import get_default_future_end_date, get_default_start_date
@@ -505,7 +504,7 @@ async def get_training_summary(
         return f"Error: {e}"
 
     # Four concurrent API calls
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
     summary_coro = make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/athlete-summary",
         api_key=api_key_to_use,

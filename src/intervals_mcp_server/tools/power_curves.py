@@ -11,7 +11,6 @@ from typing import Any
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_power_curves
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id
@@ -178,7 +177,6 @@ async def get_athlete_power_curves(
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/power-curves",
-        api_key=get_auth_api_key(),
         params=params,
     )
 

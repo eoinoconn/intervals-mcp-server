@@ -11,7 +11,6 @@ from typing import Any
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
-from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_compact, format_event_details, format_event_summary
@@ -132,7 +131,7 @@ async def get_events(
             category is provided. If not provided, all events are returned.
     """
     # Use API key from auth header (OAuth token), explicit parameter, or env var
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
 
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -211,7 +210,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=get_auth_api_key() or api_key
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -245,7 +244,7 @@ async def delete_event(
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
-    api_key_to_use = get_auth_api_key() or api_key
+    api_key_to_use = api_key
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key_to_use, method="DELETE"
     )
@@ -298,12 +297,12 @@ async def delete_events_by_date_range(
         return error_msg
 
     events, error_msg = await _fetch_events_for_deletion(
-        athlete_id_to_use, get_auth_api_key() or api_key, start_date, end_date
+        athlete_id_to_use, api_key, start_date, end_date
     )
     if error_msg:
         return error_msg
 
-    failed_events = await _delete_events_list(athlete_id_to_use, get_auth_api_key() or api_key, events)
+    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
     deleted_count = len(events) - len(failed_events)
     return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
@@ -397,7 +396,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
             name, workout_type, start_date, workout_doc, moving_time or None, distance or None
         )
         return await _create_or_update_event_request(
-            athlete_id_to_use, get_auth_api_key() or api_key, event_data, start_date, event_id
+            athlete_id_to_use, api_key, event_data, start_date, event_id
         )
     except ValueError as e:
         return f"Error: {e}"

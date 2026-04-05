@@ -58,7 +58,10 @@ Then edit the `.env` file and set your Intervals.icu athlete id and API key:
 ```
 API_KEY=your_intervals_api_key_here
 ATHLETE_ID=your_athlete_id_here
+MCP_AUTH_TOKEN=your_secret_token_here
 ```
+
+`MCP_AUTH_TOKEN` is an optional shared secret used to protect the server when deployed remotely (e.g. on Render). Generate any random string — for example with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. When set, all HTTP requests must include this token as a Bearer token in the `Authorization` header. When unset, the middleware is a no-op (suitable for local/stdio usage).
 
 #### Getting your Intervals.icu API Key
 
@@ -224,17 +227,17 @@ If you don't have write access to this repository, fork it to your GitHub accoun
 
 #### 3. Set Environment Variables
 
+Your Intervals.icu credentials (`API_KEY` and `ATHLETE_ID`) are read from the `.env` file that is baked into the Docker image at build time — you do **not** need to add them as Render environment variables.
+
 In the Render dashboard, under **Environment**, add the following variables:
 
 | Key | Value | Description |
 |-----|-------|-------------|
 | `MCP_TRANSPORT` | `sse` | Use SSE transport instead of stdio |
 | `FASTMCP_HOST` | `0.0.0.0` | Bind to all interfaces in container |
-| `INTERVALS_API_BASE_URL` | `https://intervals.icu/api/v1` | Intervals.icu API base URL |
-| `ATHLETE_ID` | `your_athlete_id` | Your Intervals.icu athlete ID (e.g. `i12345`) - optional if using OAuth token |
-| `API_KEY` | `your_api_key` | Your Intervals.icu API key - optional if using OAuth token field |
+| `MCP_AUTH_TOKEN` | `your_secret_token` | Shared secret that clients must send as a Bearer token |
 
-> **Security Best Practice:** For maximum security, omit `ATHLETE_ID` and `API_KEY` from environment variables and instead use Claude's OAuth Token field to pass your API key securely per-request.
+> **Important:** Set `MCP_AUTH_TOKEN` to the same value you generated during [Setup step 5](#5-set-up-environment-variables). Anyone with this token can access your server, so treat it like a password.
 
 #### 4. Deploy and Verify
 
@@ -246,38 +249,16 @@ In the Render dashboard, under **Environment**, add the following variables:
 
 #### 5. Configure Claude to Use Your Deployed Server
 
-**For Claude Web/Mobile (Recommended - More Secure):**
+**For Claude Web/Mobile (Recommended):**
 
 1. Open Claude → **Settings** → **Integrations** (or **MCP Servers**)
 2. Click **Add** (or **Connect apps**)
 3. Fill in:
    - **Name:** `Intervals.icu`
    - **URL:** `https://your-service-name.onrender.com/sse`
-   - **OAuth Token:** `your_intervals_icu_api_key` (e.g., `3ixrrjjh93laohysfknl8j153`)
+   - **OAuth Token:** paste your `MCP_AUTH_TOKEN` value
 
-> **Security Note:** Using the OAuth Token field is more secure than environment variables because:
-> - Your API key is not stored on the server
-> - Each user provides their own API key
-> - API keys are encrypted in transit via HTTPS
-> - Enables multi-user support without server-side credential storage
-
-**For Claude Desktop (Alternative):**
-
-Add the following to your `claude_desktop_config.json` file:
-
-```json
-{
-  "mcpServers": {
-    "Intervals.icu": {
-      "command": "node",
-      "args": [
-        "-e",
-        "const { spawn } = require('child_process'); spawn('curl', ['-N', '-s', 'https://your-service-name.onrender.com/sse'], { stdio: 'inherit' });"
-      ]
-    }
-  }
-}
-```
+Claude sends this token as a Bearer token in the `Authorization` header on every request. The server's `BearerTokenMiddleware` validates it before processing.
 
 #### 6. Test the Integration
 
@@ -307,28 +288,15 @@ You should see tools like `get_activities`, `get_wellness_data`, `get_events`, e
 - Double-check your `ATHLETE_ID` and `API_KEY` environment variables
 - Verify your Intervals.icu API key has necessary permissions
 
-### Authentication Methods
+### Authentication
 
-The intervals-mcp-server supports two authentication methods for added security and flexibility:
+The server uses a **gate-guard** model to protect remote deployments:
 
-#### Method 1: OAuth Token Field (Recommended for Render deployment)
-- **How it works**: When you deploy to Render and connect via Claude's OAuth Token field, your Intervals.icu API key is passed securely in the request headers
-- **Security benefits**: 
-  - No API keys stored on the server
-  - Per-user authentication
-  - HTTPS encryption in transit
-  - Multi-user support
-- **Setup**: Enter your Intervals.icu API key in Claude's OAuth Token field when configuring the MCP server
+- **Intervals.icu credentials** (`API_KEY`, `ATHLETE_ID`) are baked into the Docker image via the `.env` file and used by all API calls.
+- **`MCP_AUTH_TOKEN`** is a separate shared secret that gates access to the server itself. When set, every HTTP request must include `Authorization: Bearer <MCP_AUTH_TOKEN>`. Requests without a valid token receive a `401 Unauthorized` response.
+- **Local / stdio usage** does not require `MCP_AUTH_TOKEN`. When the variable is unset, the middleware is a no-op.
 
-#### Method 2: Environment Variables (Fallback)
-- **How it works**: API keys are stored as environment variables on the server/local machine
-- **Use cases**: 
-  - Local development
-  - Single-user deployments
-  - When OAuth token field is not available
-- **Setup**: Set `API_KEY` and `ATHLETE_ID` in your `.env` file or deployment environment
-
-The server will automatically use OAuth token authentication when available, falling back to environment variables if needed.
+This keeps your Intervals.icu API key off the client side while still requiring a secret to reach the server.
 
 
 ## Development and testing
