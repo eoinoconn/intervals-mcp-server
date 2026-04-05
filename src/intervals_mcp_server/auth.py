@@ -1,39 +1,48 @@
 """
 Authentication support for Intervals.icu MCP Server.
 
-Provides a TokenVerifier that accepts any Intervals.icu API key passed as a
-Bearer token.  When the server runs over SSE/streamable-http, Claude sends
-the user's API key in the Authorization header.  The verifier simply passes
-the raw token through so that tool functions can retrieve it via
-``get_auth_api_key()``.
+When the server runs over SSE/streamable-http, Claude can send the user's
+Intervals.icu API key as a Bearer token in the Authorization header.  A
+lightweight ASGI middleware extracts the token and stores it in a context
+variable so that tool functions can retrieve it via ``get_auth_api_key()``.
 """
 
-from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.server.auth.provider import AccessToken
+import contextvars
+
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+# Context variable holding the bearer token for the current request.
+_bearer_token_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "bearer_token", default=""
+)
 
 
-class IntervalsTokenVerifier:
-    """Accept any non-empty bearer token as a valid Intervals.icu API key."""
+class BearerTokenMiddleware:
+    """ASGI middleware that extracts a Bearer token from the Authorization header."""
 
-    async def verify_token(self, token: str) -> AccessToken | None:
-        if not token:
-            return None
-        return AccessToken(
-            token=token,
-            client_id="intervals-icu-user",
-            scopes=[],
-        )
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        token = ""
+        if scope["type"] in ("http", "websocket"):
+            headers = dict(scope.get("headers", []))
+            auth_header = headers.get(b"authorization", b"").decode()
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]
+
+        ctx_token = _bearer_token_var.set(token)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _bearer_token_var.reset(ctx_token)
 
 
 def get_auth_api_key() -> str:
-    """Return the API key from the current request's auth context.
+    """Return the API key from the current request's Bearer token.
 
-    Returns the bearer token if present (i.e. when the server runs over
-    SSE/streamable-http and the client supplies a token).  Returns an empty
-    string when no token is available — callers should fall back to their
-    own ``api_key`` parameter or the ``API_KEY`` environment variable.
+    Returns an empty string when no token is available (e.g. stdio transport).
+    Callers should fall back to their own ``api_key`` parameter or the
+    ``API_KEY`` environment variable.
     """
-    access_token = get_access_token()
-    if access_token and access_token.token:
-        return access_token.token
-    return ""
+    return _bearer_token_var.get()

@@ -7,8 +7,10 @@ This module handles transport configuration and server startup logic.
 import os
 import logging
 
+import uvicorn
 from mcp.server.fastmcp import FastMCP  # pylint: disable=import-error
 
+from intervals_mcp_server.auth import BearerTokenMiddleware
 from intervals_mcp_server.utils.types import TransportAliases
 
 logger = logging.getLogger("intervals_icu_mcp_server")
@@ -67,7 +69,24 @@ def start_server(mcp_instance: FastMCP, transport: TransportAliases) -> None:
             mcp_instance.settings.sse_path,
             mcp_instance.settings.message_path,
         )
-        mcp_instance.run(transport="sse", mount_path=mount_path)
+        # Wrap the SSE app with BearerTokenMiddleware so that tools can
+        # access the Intervals.icu bearer token sent by the client.
+        starlette_app = mcp_instance.sse_app(mount_path)
+        app = BearerTokenMiddleware(starlette_app)
+
+        import anyio  # pylint: disable=import-outside-toplevel
+
+        async def _run() -> None:
+            config = uvicorn.Config(
+                app,
+                host=host,
+                port=port,
+                log_level=mcp_instance.settings.log_level.lower(),
+            )
+            server = uvicorn.Server(config)
+            await server.serve()
+
+        anyio.run(_run)
     else:  # STREAMABLE_HTTP
         logger.info(
             "Starting MCP server with Streamable HTTP transport at http://%s:%s%s.",

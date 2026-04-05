@@ -103,7 +103,7 @@ def _prepare_request_config(
     url: str,
     api_key: str | None,
     method: str,
-) -> tuple[str, httpx.BasicAuth, dict[str, str], str | None]:
+) -> tuple[str, httpx.BasicAuth | None, dict[str, str], str | None]:
     """Prepare request configuration including headers, auth, and URL.
 
     Returns:
@@ -122,12 +122,21 @@ def _prepare_request_config(
         logger.error("No API key provided for request to: %s", url)
         return (
             "",
-            httpx.BasicAuth("", ""),
+            None,
             {},
             "API key is required. Set API_KEY env var or pass api_key",
         )
 
-    auth = httpx.BasicAuth("API_KEY", key_to_use)
+    # If the key came from a Bearer token (OAuth flow), use Bearer auth
+    # directly with Intervals.icu. Otherwise use HTTP Basic auth.
+    from intervals_mcp_server.auth import get_auth_api_key  # pylint: disable=import-outside-toplevel
+    bearer_token = get_auth_api_key()
+    if bearer_token and key_to_use == bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+        auth = None
+    else:
+        auth = httpx.BasicAuth("API_KEY", key_to_use)
+
     full_url = f"{config.intervals_api_base_url}{url}"
     return full_url, auth, headers, None
 
