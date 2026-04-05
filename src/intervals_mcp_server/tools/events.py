@@ -20,7 +20,32 @@ from intervals_mcp_server.utils.validation import resolve_activity_type, resolve
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
+# FastMCP dependencies for accessing request headers
+try:
+    from fastmcp.dependencies import CurrentHeaders
+except ImportError:
+    # Fallback for older versions of FastMCP or non-HTTP transports
+    def CurrentHeaders():
+        return {}
+
 config = get_config()
+
+
+def _extract_api_key_from_headers(headers: dict) -> str:
+    """Extract API key from Authorization header.
+    
+    Supports both 'Bearer <api_key>' and '<api_key>' formats.
+    """
+    auth_header = headers.get("authorization", "") or headers.get("Authorization", "")
+    if not auth_header:
+        return ""
+    
+    # Handle 'Bearer <api_key>' format (Claude OAuth token field)
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]  # Extract token after "Bearer "
+    
+    # Handle direct API key format
+    return auth_header
 
 # Known event categories from the Intervals.icu API
 VALID_EVENT_CATEGORIES: set[str] = {
@@ -115,6 +140,7 @@ async def get_events(
     end_date: str = "",
     compact: bool = True,
     category: str = "",
+    headers: dict = CurrentHeaders(),
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -129,7 +155,15 @@ async def get_events(
             RACE_A, RACE_B, RACE_C, NOTE, PLAN, HOLIDAY, SICK, INJURED, SET_EFTP,
             FITNESS_DAYS, SEASON_START, TARGET, SET_FITNESS. Returns an error if an invalid
             category is provided. If not provided, all events are returned.
+        headers: Request headers (automatically injected by FastMCP for HTTP transports)
     """
+    # Extract API key from Authorization header if provided via OAuth token field
+    extracted_api_key = _extract_api_key_from_headers(headers)
+    api_key_to_use = extracted_api_key or api_key or config.api_key
+    
+    if not api_key_to_use:
+        return "Error: API key is required. Set API_KEY environment variable or provide via Authorization header."
+
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -159,7 +193,7 @@ async def get_events(
         params["category"] = category_filter
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
+        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key_to_use, params=params
     )
 
     if isinstance(result, dict) and "error" in result:

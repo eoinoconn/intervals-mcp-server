@@ -25,7 +25,32 @@ from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_da
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
+# FastMCP dependencies for accessing request headers
+try:
+    from fastmcp.dependencies import CurrentHeaders
+except ImportError:
+    # Fallback for older versions of FastMCP or non-HTTP transports
+    def CurrentHeaders():
+        return {}
+
 config = get_config()
+
+
+def _extract_api_key_from_headers(headers: dict) -> str:
+    """Extract API key from Authorization header.
+    
+    Supports both 'Bearer <api_key>' and '<api_key>' formats.
+    """
+    auth_header = headers.get("authorization", "") or headers.get("Authorization", "")
+    if not auth_header:
+        return ""
+    
+    # Handle 'Bearer <api_key>' format (Claude OAuth token field)
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]  # Extract token after "Bearer "
+    
+    # Handle direct API key format
+    return auth_header
 
 
 def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
@@ -123,6 +148,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     limit: int = 10,
     include_unnamed: bool = False,
     compact: bool = True,
+    headers: dict = CurrentHeaders(),
 ) -> str:
     """Get a list of activities for an athlete from Intervals.icu
 
@@ -134,7 +160,15 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         limit: Maximum number of activities to return (optional, defaults to 10)
         include_unnamed: Whether to include unnamed activities (optional, defaults to False)
         compact: If True, return a brief one-line-per-activity summary to save tokens (optional, defaults to True)
+        headers: Request headers (automatically injected by FastMCP for HTTP transports)
     """
+    # Extract API key from Authorization header if provided via OAuth token field
+    extracted_api_key = _extract_api_key_from_headers(headers)
+    api_key_to_use = extracted_api_key or api_key or config.api_key
+    
+    if not api_key_to_use:
+        return "Error: API key is required. Set API_KEY environment variable or provide via Authorization header."
+
     # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -145,10 +179,10 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     # Fetch more activities if we need to filter out unnamed ones
     api_limit = limit * 3 if not include_unnamed else limit
 
-    # Call the Intervals.icu API
+    # Call the Intervals.icu API with the extracted API key
     params = {"oldest": start_date, "newest": end_date, "limit": api_limit}
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/activities", api_key=api_key, params=params
+        url=f"/athlete/{athlete_id_to_use}/activities", api_key=api_key_to_use, params=params
     )
 
     # Check for error
@@ -179,15 +213,23 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
 
 
 @mcp.tool(annotations=ToolAnnotations(title="Get Activity Details", readOnlyHint=True, destructiveHint=False))
-async def get_activity_details(activity_id: str, api_key: str = "") -> str:
+async def get_activity_details(activity_id: str, api_key: str = "", headers: dict = CurrentHeaders()) -> str:
     """Get detailed information for a specific activity from Intervals.icu
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        headers: Request headers (automatically injected by FastMCP for HTTP transports)
     """
+    # Extract API key from Authorization header if provided via OAuth token field
+    extracted_api_key = _extract_api_key_from_headers(headers)
+    api_key_to_use = extracted_api_key or api_key or config.api_key
+    
+    if not api_key_to_use:
+        return "Error: API key is required. Set API_KEY environment variable or provide via Authorization header."
+
     # Call the Intervals.icu API
-    result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key)
+    result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key_to_use)
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")

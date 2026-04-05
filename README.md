@@ -195,6 +195,142 @@ ChatGPT’s beta MCP connectors can also talk to this server over the SSE transp
 
 3. Save the connector and open a new chat. ChatGPT will keep the SSE connection open and POST follow-up requests to the `/messages/` endpoint announced by the server. If you restart the MCP server or tunnel, rerun the SSE command and update the connector URL if it changes.
 
+## Deployment with Render
+
+For production use or remote access from Claude on any device, you can deploy the server to Render as a Docker Web Service. This enables Claude to connect remotely without local setup.
+
+### Prerequisites
+
+1. A [Render](https://render.com) account
+2. Your Intervals.icu API Key and Athlete ID (see the Setup section above)
+3. The intervals-mcp-server repository on GitHub
+
+### Deployment Steps
+
+#### 1. Fork the Repository (if needed)
+
+If you don't have write access to this repository, fork it to your GitHub account first.
+
+#### 2. Create a New Web Service on Render
+
+1. Go to [render.com](https://render.com) → **New** → **Web Service**
+2. Connect your GitHub repository (`intervals-mcp-server` or your fork)
+3. Configure the service:
+   - **Name**: `intervals-mcp-server` (or your preferred name)
+   - **Branch**: `main`
+   - **Runtime**: **Docker**
+   - **Port**: `8000`
+   - **Health Check Path**: `/sse`
+
+#### 3. Set Environment Variables
+
+In the Render dashboard, under **Environment**, add the following variables:
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `MCP_TRANSPORT` | `sse` | Use SSE transport instead of stdio |
+| `FASTMCP_HOST` | `0.0.0.0` | Bind to all interfaces in container |
+| `INTERVALS_API_BASE_URL` | `https://intervals.icu/api/v1` | Intervals.icu API base URL |
+| `ATHLETE_ID` | `your_athlete_id` | Your Intervals.icu athlete ID (e.g. `i12345`) - optional if using OAuth token |
+| `API_KEY` | `your_api_key` | Your Intervals.icu API key - optional if using OAuth token field |
+
+> **Security Best Practice:** For maximum security, omit `ATHLETE_ID` and `API_KEY` from environment variables and instead use Claude's OAuth Token field to pass your API key securely per-request.
+
+#### 4. Deploy and Verify
+
+1. Click **Create Web Service** — Render will build the Docker image and deploy
+2. Wait for the build to complete and health check to pass (green status)
+3. Note your service URL: `https://your-service-name.onrender.com`
+4. Test the SSE endpoint by opening `https://your-service-name.onrender.com/sse` in a browser
+   - You should see a persistent `text/event-stream` connection
+
+#### 5. Configure Claude to Use Your Deployed Server
+
+**For Claude Web/Mobile (Recommended - More Secure):**
+
+1. Open Claude → **Settings** → **Integrations** (or **MCP Servers**)
+2. Click **Add** (or **Connect apps**)
+3. Fill in:
+   - **Name:** `Intervals.icu`
+   - **URL:** `https://your-service-name.onrender.com/sse`
+   - **OAuth Token:** `your_intervals_icu_api_key` (e.g., `3ixrrjjh93laohysfknl8j153`)
+
+> **Security Note:** Using the OAuth Token field is more secure than environment variables because:
+> - Your API key is not stored on the server
+> - Each user provides their own API key
+> - API keys are encrypted in transit via HTTPS
+> - Enables multi-user support without server-side credential storage
+
+**For Claude Desktop (Alternative):**
+
+Add the following to your `claude_desktop_config.json` file:
+
+```json
+{
+  "mcpServers": {
+    "Intervals.icu": {
+      "command": "node",
+      "args": [
+        "-e",
+        "const { spawn } = require('child_process'); spawn('curl', ['-N', '-s', 'https://your-service-name.onrender.com/sse'], { stdio: 'inherit' });"
+      ]
+    }
+  }
+}
+```
+
+#### 6. Test the Integration
+
+Open a new Claude conversation and ask:
+> "What MCP tools do you have available?"
+
+You should see tools like `get_activities`, `get_wellness_data`, `get_events`, etc. Then test with:
+> "Fetch my recent activities from Intervals.icu"
+
+### Troubleshooting Render Deployment
+
+**Service won't start:**
+- Check the Render logs for build errors
+- Ensure all environment variables are set correctly
+- Verify your Intervals.icu API key is valid
+
+**Health check fails:**
+- The `/sse` endpoint takes a few seconds to become available after startup
+- Check that `FASTMCP_HOST=0.0.0.0` is set (required for Docker containers)
+
+**Claude can't connect:**
+- Verify your Render service URL is publicly accessible
+- Ensure the URL ends with `/sse`
+- Try opening the SSE endpoint in a browser to confirm it's working
+
+**API errors:**
+- Double-check your `ATHLETE_ID` and `API_KEY` environment variables
+- Verify your Intervals.icu API key has necessary permissions
+
+### Authentication Methods
+
+The intervals-mcp-server supports two authentication methods for added security and flexibility:
+
+#### Method 1: OAuth Token Field (Recommended for Render deployment)
+- **How it works**: When you deploy to Render and connect via Claude's OAuth Token field, your Intervals.icu API key is passed securely in the request headers
+- **Security benefits**: 
+  - No API keys stored on the server
+  - Per-user authentication
+  - HTTPS encryption in transit
+  - Multi-user support
+- **Setup**: Enter your Intervals.icu API key in Claude's OAuth Token field when configuring the MCP server
+
+#### Method 2: Environment Variables (Fallback)
+- **How it works**: API keys are stored as environment variables on the server/local machine
+- **Use cases**: 
+  - Local development
+  - Single-user deployments
+  - When OAuth token field is not available
+- **Setup**: Set `API_KEY` and `ATHLETE_ID` in your `.env` file or deployment environment
+
+The server will automatically use OAuth token authentication when available, falling back to environment variables if needed.
+
+
 ## Development and testing
 
 Install development dependencies and run the test suite with:
