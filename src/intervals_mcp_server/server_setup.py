@@ -34,10 +34,10 @@ def setup_transport() -> TransportAliases:
         allowed = ", ".join(item.value for item in TransportAliases)
         raise ValueError(f"Unsupported MCP_TRANSPORT value. Use one of: {allowed}.") from exc
 
-    # Map HTTP to STREAMABLE_HTTP
+    # Map SSE and HTTP aliases to STREAMABLE_HTTP
     selected_transport = (
         TransportAliases.STREAMABLE_HTTP
-        if transport_alias == TransportAliases.HTTP
+        if transport_alias in (TransportAliases.HTTP, TransportAliases.SSE)
         else transport_alias
     )
 
@@ -58,16 +58,6 @@ def start_server(mcp_instance: FastMCP, transport: TransportAliases) -> None:
     if transport == TransportAliases.STDIO:
         logger.info("Starting MCP server with stdio transport.")
         mcp_instance.run()
-    elif transport == TransportAliases.SSE:
-        mount_path = os.getenv("MCP_SSE_MOUNT_PATH")
-        logger.info(
-            "Starting MCP server with SSE transport at http://%s:%s%s (messages: %s).",
-            host,
-            port,
-            mcp_instance.settings.sse_path,
-            mcp_instance.settings.message_path,
-        )
-        mcp_instance.run(transport="sse", mount_path=mount_path)
     else:  # STREAMABLE_HTTP
         logger.info(
             "Starting MCP server with Streamable HTTP transport at http://%s:%s%s.",

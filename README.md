@@ -21,9 +21,11 @@ The fastest way to get started is to deploy the server to [Render](https://rende
 2. Connect your GitHub repository (`intervals-mcp-server` or your fork)
 3. Configure the service:
    - **Name**: `intervals-mcp-server` (or your preferred name)
-   - **Branch**: `main`
+   - **Branch**: `develop`
    - **Runtime**: **Docker**
    - **Instance Type**: Free tier works fine
+
+> **💤 Free tier cold starts:** Render free-tier services sleep after 15 minutes of inactivity. The first request after sleeping may take 30–60 seconds while the container restarts. Subsequent requests are fast. To avoid this, upgrade to a paid instance or use an external cron/ping service to keep it awake.
 
 ### 2. Set Environment Variables
 
@@ -31,7 +33,7 @@ In the Render dashboard under **Environment**, add:
 
 | Key | Value | Description |
 |-----|-------|-------------|
-| `MCP_TRANSPORT` | `sse` | Enables the SSE transport (exposes `/sse` and `/messages/` endpoints) |
+| `MCP_TRANSPORT` | `http` | Enables the remote transport (streamable HTTP) |
 | `FASTMCP_HOST` | `0.0.0.0` | Bind to all interfaces (required inside Docker) |
 | `FASTMCP_PORT` | `8000` | Port the server listens on |
 | `ATHLETE_ID` | `your_athlete_id` | Your Intervals.icu athlete ID (e.g. `i12345`) |
@@ -42,7 +44,9 @@ In the Render dashboard under **Environment**, add:
 1. Click **Create Web Service** — Render will build the Docker image and deploy
 2. Wait for the build to complete (green status)
 3. Note your service URL: `https://your-service-name.onrender.com`
-4. Test by opening `https://your-service-name.onrender.com/sse` in a browser — you should see a persistent `text/event-stream` connection
+4. Test by opening `https://your-service-name.onrender.com/mcp` in a browser — you should get a response from the server
+
+> **⚠️ Security Warning:** Claude does not currently authenticate when connecting to remote MCP servers. This means your Render endpoint is publicly accessible — anyone who discovers the URL can query and **mutate** your Intervals.icu data (e.g. create/update events). Do not share your service URL publicly. If this is a concern, use the [Local Setup](#local-setup-alternative) instead, which keeps everything on your machine behind stdio.
 
 ## Connecting Claude
 
@@ -50,7 +54,7 @@ In the Render dashboard under **Environment**, add:
 2. Click **Add**
 3. Fill in:
    - **Name:** `Intervals.icu`
-   - **URL:** `https://your-service-name.onrender.com/sse`
+   - **URL:** `https://your-service-name.onrender.com/mcp`
 
 Open a new conversation and ask "What MCP tools do you have available?" to confirm the connection.
 
@@ -59,28 +63,47 @@ Open a new conversation and ask "What MCP tools do you have available?" to confi
 1. In ChatGPT, open **Settings → Features → Custom MCP Connectors** → **Add**
 2. Fill in:
    - **Name**: `Intervals.icu`
-   - **MCP Server URL**: `https://your-service-name.onrender.com/sse`
+   - **MCP Server URL**: `https://your-service-name.onrender.com/mcp`
 
-Save the connector and open a new chat. ChatGPT will keep the SSE connection open and POST follow-up requests to the `/messages/` endpoint.
+Save the connector and open a new chat.
 
 ## Available Tools
 
 Once connected, the following tools are available:
 
+**Activities**
 - `get_activities` — Retrieve a list of activities
 - `get_activity_details` — Get detailed information for a specific activity
 - `get_activity_intervals` — Get interval data for a specific activity
 - `get_activity_streams` — Get time-series stream data (power, HR, cadence, etc.)
-- `get_activity_histogram` — Get a power, heart rate, or pace histogram (`histogram_type`: `"power"`, `"hr"`, or `"pace"`)
-- `get_athlete_power_curves` — Get best power output curves for selected durations and time periods
-- `get_wellness_data` — Fetch wellness data
+- `get_activity_histogram` — Get a power, heart rate, or pace histogram
+- `get_activity_messages` — Get messages/comments on an activity
+- `add_activity_message` — Add a message/comment to an activity
+
+**Events**
 - `get_events` — Retrieve upcoming events (workouts, races, etc.)
 - `get_event_by_id` — Get detailed information for a specific event
+- `add_or_update_event` — Create or update an event
+- `delete_event` — Delete a specific event
+- `delete_events_by_date_range` — Delete events within a date range
+
+**Wellness & Training**
+- `get_wellness_data` — Fetch wellness data
+- `get_training_summary` — Get a training load summary
+- `get_athlete_power_curves` — Get best power output curves for selected durations and time periods
+- `get_athlete_zones` — Get athlete training zones (power, HR, pace, etc.)
+
+**Custom Items**
+- `get_custom_items` — List custom items
+- `get_custom_item_by_id` — Get a specific custom item
+- `create_custom_item` — Create a new custom item
+- `update_custom_item` — Update an existing custom item
+- `delete_custom_item` — Delete a custom item
 
 ## Troubleshooting Render Deployment
 
 - **Service won't start** — Check Render logs for build errors. Ensure all environment variables are set.
-- **Claude/ChatGPT can't connect** — Verify the URL ends with `/sse` and is publicly accessible. Try opening it in a browser.
+- **Claude/ChatGPT can't connect** — Verify the URL ends with `/mcp` and is publicly accessible. Try opening it in a browser.
 - **API errors** — Double-check your `ATHLETE_ID` and `API_KEY` values. Verify your Intervals.icu API key is valid.
 - **Free tier cold starts** — Render free-tier services sleep after inactivity. The first request may take 30–60 seconds to wake up.
 
@@ -162,12 +185,12 @@ ATHLETE_ID=your_athlete_id_here
 
 3. Restart Claude Desktop.
 
-### Configure ChatGPT (local SSE)
+### Configure ChatGPT (local)
 
-1. Start the server in SSE mode:
+1. Start the server in HTTP mode:
 
    ```bash
-   export FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8765 MCP_TRANSPORT=sse FASTMCP_LOG_LEVEL=INFO
+   export FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8765 MCP_TRANSPORT=http FASTMCP_LOG_LEVEL=INFO
    python src/intervals_mcp_server/server.py
    ```
 
@@ -175,7 +198,7 @@ ATHLETE_ID=your_athlete_id_here
 
 3. In ChatGPT, open **Settings → Features → Custom MCP Connectors** → **Add**:
    - **Name**: `Intervals.icu`
-   - **MCP Server URL**: `https://<your-public-host>/sse`
+   - **MCP Server URL**: `https://<your-public-host>/mcp`
 
 ### Updating
 
