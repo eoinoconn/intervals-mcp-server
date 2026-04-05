@@ -8,6 +8,8 @@ import json
 from datetime import datetime
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import format_power_curves
@@ -55,7 +57,7 @@ def _validate_dates(start_date: str | None, end_date: str | None) -> str | None:
     Returns:
         An error message if validation fails, otherwise None.
     """
-    if (start_date is None) != (end_date is None):
+    if bool(start_date) != bool(end_date):
         return "Error: Both start_date and end_date must be provided together for a custom date range."
     if start_date and end_date:
         try:
@@ -118,17 +120,17 @@ def _extract_curve_data(
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Athlete Power Curves", readOnlyHint=True, destructiveHint=False))
 async def get_athlete_power_curves(
     activity_type: str,
     durations: list[int] = DEFAULT_DURATIONS,
-    indoor_outdoor: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    indoor_outdoor: str = "",
+    start_date: str = "",
+    end_date: str = "",
     this_season: bool = True,
     last_season: bool = True,
     include_normalised: bool = True,
-    athlete_id: str | None = None,
+    athlete_id: str = "",
 ) -> str:
     """Get power curves for an athlete from Intervals.icu.
 

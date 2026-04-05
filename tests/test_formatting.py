@@ -11,6 +11,7 @@ from intervals_mcp_server.utils.formatting import (
     format_activity_summary,
     format_workout,
     format_wellness_entry,
+    format_event_compact,
     format_event_summary,
     format_event_details,
     format_intervals,
@@ -209,6 +210,43 @@ def test_wellness_fields_constant():
     assert WELLNESS_FIELDS == expected
 
 
+def test_format_wellness_entry_include_all_fields():
+    """
+    Test that format_wellness_entry with include_all_fields=True includes additional unknown fields.
+    """
+    entry = {
+        "id": "2024-06-01",
+        "ctl": 80,
+        "weight": 75,
+        "customField1": "hello",
+        "customField2": 42,
+        "updated": "2024-06-01T10:00:00Z",
+    }
+    result = format_wellness_entry(entry, include_all_fields=True)
+    assert "Date: 2024-06-01" in result
+    assert "Fitness (CTL): 80" in result
+    assert "Weight: 75 kg" in result
+    assert "Other Fields:" in result
+    assert "customField1: hello" in result
+    assert "customField2: 42" in result
+    # "updated" is a known built-in field, should not appear in Other Fields
+    assert "updated:" not in result
+
+
+def test_format_wellness_entry_no_extra_fields_by_default():
+    """
+    Test that format_wellness_entry without include_all_fields does not include additional fields.
+    """
+    entry = {
+        "id": "2024-06-01",
+        "ctl": 80,
+        "customField1": "hello",
+    }
+    result = format_wellness_entry(entry)
+    assert "Other Fields:" not in result
+    assert "customField1" not in result
+
+
 def test_format_event_summary():
     """
     Test that format_event_summary returns a string containing the event date and type.
@@ -218,11 +256,119 @@ def test_format_event_summary():
         "id": "e1",
         "name": "Event1",
         "description": "desc",
-        "race": True,
+        "category": "RACE",
     }
     summary = format_event_summary(event)
     assert "Date: 2024-01-01" in summary
     assert "Type: Race" in summary
+
+
+def test_format_event_summary_includes_load_metrics():
+    """
+    Test that format_event_summary includes training load metrics when present.
+    """
+    event = {
+        "start_date_local": "2024-06-15",
+        "id": "e2",
+        "name": "Tempo Ride",
+        "description": "Easy tempo session",
+        "category": "WORKOUT",
+        "icu_training_load": 85,
+        "icu_atl": 60,
+        "icu_ctl": 55,
+        "icu_intensity": 0.72,
+        "strain_score": 42,
+    }
+    summary = format_event_summary(event)
+    assert "Training Load: 85" in summary
+    assert "ATL: 60" in summary
+    assert "CTL: 55" in summary
+    assert "Intensity: 0.7" in summary
+    assert "Strain: 42" in summary
+    assert "Description: Easy tempo session" in summary
+
+
+def test_format_event_summary_omits_missing_load_metrics():
+    """
+    Test that format_event_summary omits load metrics that are not present.
+    """
+    event = {
+        "date": "2024-06-15",
+        "id": "e3",
+        "name": "Rest Day",
+        "description": "No training",
+    }
+    summary = format_event_summary(event)
+    assert "Training Load" not in summary
+    assert "ATL" not in summary
+    assert "CTL" not in summary
+
+
+def test_format_event_compact():
+    """
+    Test that format_event_compact returns a concise single-line format.
+    """
+    event = {
+        "start_date_local": "2024-06-15T08:00:00",
+        "id": "e10",
+        "name": "Sweet Spot Ride",
+        "category": "WORKOUT",
+        "icu_training_load": 95,
+        "icu_atl": 70,
+        "icu_ctl": 62,
+        "icu_intensity": 0.80,
+        "strain_score": 50,
+    }
+    result = format_event_compact(event)
+    assert "2024-06-15" in result
+    assert "Workout: Sweet Spot Ride" in result
+    assert "ID:e10" in result
+    assert "TL:95" in result
+    assert "ATL:70" in result
+    assert "CTL:62" in result
+    assert "Int:0.8" in result
+    assert "Strain:50" in result
+    # Should be a single line
+    assert "\n" not in result
+
+
+def test_format_event_compact_minimal():
+    """
+    Test that format_event_compact works with minimal data and omits missing fields.
+    """
+    event = {
+        "date": "2024-03-01",
+        "id": "e20",
+        "name": "Easy Run",
+        "category": "RACE",
+    }
+    result = format_event_compact(event)
+    assert "2024-03-01" in result
+    assert "Race: Easy Run" in result
+    assert "TL:" not in result
+    assert "ATL:" not in result
+    assert "\n" not in result
+
+
+def test_format_event_compact_is_smaller_than_summary():
+    """
+    Verify that the compact output is meaningfully smaller than the summary output.
+    """
+    event = {
+        "start_date_local": "2024-06-15",
+        "id": "e30",
+        "name": "Threshold Intervals",
+        "description": "4x8min at threshold with 4min recovery between intervals",
+        "category": "WORKOUT",
+        "icu_training_load": 110,
+        "icu_atl": 75,
+        "icu_ctl": 65,
+        "icu_intensity": 0.85,
+        "strain_score": 55,
+    }
+    compact = format_event_compact(event)
+    summary = format_event_summary(event)
+    assert len(compact) < len(summary)
 
 
 def test_format_event_details():
@@ -241,7 +387,7 @@ def test_format_event_details():
             "tss": 50,
             "intervals": [1, 2],
         },
-        "race": True,
+        "category": "RACE",
         "priority": "A",
         "result": "1st",
         "calendar": {"name": "Main"},

@@ -64,6 +64,27 @@ WELLNESS_FIELDS: set[str] = {
 }
 
 
+class _KeyTracker(dict):
+    """A dict wrapper that records which keys are accessed."""
+
+    def __init__(self, data: dict[str, Any]) -> None:
+        super().__init__(data)
+        self.accessed: set[str] = set()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self.accessed.add(key)
+        return super().get(key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        self.accessed.add(key)
+        return super().__getitem__(key)
+
+    def __contains__(self, key: object) -> bool:
+        if isinstance(key, str):
+            self.accessed.add(key)
+        return super().__contains__(key)
+
+
 def _get_activity_value(activity: dict[str, Any], *keys: str) -> Any:
     """Get the first non-None value from a series of activity keys."""
     for key in keys:
@@ -85,6 +106,29 @@ def _add_section(lines: list[str], heading: str, section_lines: list[str]) -> No
     if section_lines:
         lines.append(heading)
         lines.extend(section_lines)
+
+
+def _build_ignore_flag_lines(data: dict[str, Any], prefix: str = "  ") -> list[str]:
+    """Build ignore-flag lines for activity data, only including flags that are True."""
+    lines: list[str] = []
+    if data.get("icu_ignore_time"):
+        lines.append(f"{prefix}Ignore Time: True")
+    if data.get("icu_ignore_power"):
+        lines.append(f"{prefix}Ignore Power: True")
+    if data.get("icu_ignore_hr"):
+        lines.append(f"{prefix}Ignore HR: True")
+    return lines
+
+
+def format_ignore_flags(activity_data: dict[str, Any]) -> str:
+    """Format ignore flags from activity data as a standalone block.
+
+    Returns an empty string when no flags are set to True.
+    """
+    lines = _build_ignore_flag_lines(activity_data, prefix="  ")
+    if lines:
+        return "Data Flags:\n" + "\n".join(lines) + "\n\n"
+    return ""
 
 
 def format_activity_summary(activity: dict[str, Any]) -> str:
@@ -191,6 +235,9 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     if compliance is not None:
         _add_field(compliance_lines, "Compliance", f"{compliance:.2f}%")
     _add_section(lines, "  Workout Compliance:", compliance_lines)
+
+    # Data ignore flags - only if True
+    _add_section(lines, "  Data Flags:", _build_ignore_flag_lines(activity))
 
     # Device - only if present
     device = activity.get("device_name")
@@ -378,7 +425,19 @@ def _format_nutrition_hydration(entries: dict[str, Any]) -> list[str]:
     return nutrition_lines
 
 
-def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = None) -> str:
+def _format_other_fields(entries: dict[str, Any], known_keys: set[str]) -> list[str]:
+    """Format any fields not already handled by the standard formatting sections."""
+    other_lines = []
+    for key, value in entries.items():
+        if key not in known_keys and value is not None:
+            if isinstance(value, (dict, list)):
+                other_lines.append(f"- {key}: {json.dumps(value)}")
+            else:
+                other_lines.append(f"- {key}: {value}")
+    return other_lines
+
+
+def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = None, include_all_fields: bool = False) -> str:
     """Format wellness entry data into a readable string.
 
     Formats various wellness metrics including training metrics, vital signs,
@@ -405,6 +464,12 @@ def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = Non
         A formatted string representation of the wellness entry.
     """
     include_all = not fields
+    if include_all_fields:
+        entries = _KeyTracker(entries)
+        # Mark metadata keys so they don't appear in "Other Fields"
+        entries.get("date")
+        entries.get("updated")
+
     lines = ["Wellness Data:"]
     lines.append(f"Date: {entries.get('id', 'N/A')}")
     lines.append("")
@@ -469,24 +534,150 @@ def format_wellness_entry(entries: dict[str, Any], fields: set[str] | None = Non
     if "locked" in entries:
         lines.append(f"Status: {'Locked' if entries.get('locked') else 'Unlocked'}")
 
+    if include_all_fields and isinstance(entries, _KeyTracker):
+        other_lines = _format_other_fields(entries, entries.accessed)
+        if other_lines:
+            lines.append("")
+            lines.append("Other Fields:")
+            lines.extend(other_lines)
+
     return "\n".join(lines)
+
+
+def _normalise_date(raw: Any) -> str:
+    """Normalise a raw date value to YYYY-MM-DD where possible."""
+    if isinstance(raw, str) and len(raw) > 10:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return str(raw)
+
+
+def _parse_date(raw: str) -> datetime | None:
+    """Try to parse a raw date string into a datetime."""
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+def _is_multi_day(start_raw: str, end_raw: str) -> bool:
+    """Return True if start and end span more than a single calendar day.
+
+    Many single-day events have start/end exactly at midnight one day apart
+    (e.g. 2025-03-20T00:00:00 → 2025-03-21T00:00:00).  These are NOT
+    considered multi-day.
+    """
+    start_dt = _parse_date(start_raw)
+    end_dt = _parse_date(end_raw)
+    if start_dt is None or end_dt is None:
+        # Fall back to simple string comparison of normalised dates.
+        return _normalise_date(end_raw) > _normalise_date(start_raw)
+    delta = end_dt - start_dt
+    # More than 24 hours ⇒ multi-day
+    return delta.total_seconds() > 86400
+
+
+def _get_event_date(event: dict[str, Any]) -> str:
+    """Extract and normalise the event date string.
+
+    If the event spans multiple days the returned string uses the form
+    ``start to end``.  Single-day events (including those whose start and
+    end are exactly midnight one day apart) show only the start date.
+    """
+    start_raw = event.get("start_date_local", event.get("date", "Unknown"))
+    start = _normalise_date(start_raw)
+
+    end_raw = event.get("end_date_local")
+    if end_raw is not None and _is_multi_day(str(start_raw), str(end_raw)):
+        return f"{start} to {_normalise_date(end_raw)}"
+
+    return start
+
+
+def _get_event_type(event: dict[str, Any]) -> str:
+    """Derive a short event-type label."""
+    category = event.get("category")
+    if category and category == "WORKOUT":
+        return "Workout"
+    return category.replace("_", " ").title() if category is not None else "Other"
+
+
+def _round1(value: Any) -> Any:
+    """Round a numeric value to one decimal place, pass others through."""
+    if isinstance(value, float):
+        return round(value, 1)
+    return value
+
+
+def _format_event_load_fields(event: dict[str, Any]) -> list[str]:
+    """Return formatted load-metric lines that have data."""
+    lines: list[str] = []
+    _add_field(lines, "Training Load", _round1(event.get("icu_training_load")))
+    _add_field(lines, "ATL", _round1(event.get("icu_atl")))
+    _add_field(lines, "CTL", _round1(event.get("icu_ctl")))
+    _add_field(lines, "Intensity", _round1(event.get("icu_intensity")))
+    _add_field(lines, "Strain", _round1(event.get("strain_score")))
+    return lines
+
+
+def format_event_compact(event: dict[str, Any]) -> str:
+    """Format an event as a single compact line for summary listings."""
+    event_date = _get_event_date(event)
+    event_type = _get_event_type(event)
+    event_name = event.get("name", "Unnamed")
+    event_id = event.get("id", "")
+
+    parts = [f"{event_date} | {event_type}: {event_name} (ID:{event_id})"]
+
+    tl = event.get("icu_training_load")
+    if tl is not None:
+        parts.append(f"TL:{_round1(tl)}")
+
+    atl = event.get("icu_atl")
+    if atl is not None:
+        parts.append(f"ATL:{_round1(atl)}")
+
+    ctl = event.get("icu_ctl")
+    if ctl is not None:
+        parts.append(f"CTL:{_round1(ctl)}")
+
+    intensity = event.get("icu_intensity")
+    if intensity is not None:
+        parts.append(f"Int:{_round1(intensity)}")
+
+    strain = event.get("strain_score")
+    if strain is not None:
+        parts.append(f"Strain:{_round1(strain)}")
+
+    return " | ".join(parts)
 
 
 def format_event_summary(event: dict[str, Any]) -> str:
     """Format a basic event summary into a readable string."""
 
-    # Update to check for "date" if "start_date_local" is not provided
-    event_date = event.get("start_date_local", event.get("date", "Unknown"))
-    event_type = "Workout" if event.get("workout") else "Race" if event.get("race") else "Other"
+    event_date = _get_event_date(event)
+    event_type = _get_event_type(event)
     event_name = event.get("name", "Unnamed")
     event_id = event.get("id", "N/A")
     event_desc = event.get("description", "No description")
 
-    return f"""Date: {event_date}
-ID: {event_id}
-Type: {event_type}
-Name: {event_name}
-Description: {event_desc}"""
+    lines = [
+        f"Date: {event_date}",
+        f"ID: {event_id}",
+        f"Type: {event_type}",
+        f"Name: {event_name}",
+    ]
+
+    load_lines = _format_event_load_fields(event)
+    if load_lines:
+        lines.extend(load_lines)
+
+    lines.append(f"Description: {event_desc}")
+
+    return "\n".join(lines).rstrip("\n") + "\n\n"
 
 
 def format_event_details(event: dict[str, Any]) -> str:
@@ -531,6 +722,22 @@ Result: {event.get("result", "N/A")}"""
 Calendar: {cal.get("name", "N/A")}"""
 
     return event_details
+
+
+def format_activity_message(message: dict[str, Any]) -> str:
+    """Format an activity message/note into a readable string."""
+    created = message.get("created", "Unknown")
+    if isinstance(created, str) and len(created) > 10:
+        try:
+            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            created = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+
+    return f"""Author: {message.get("name", "Unknown")}
+Date: {created}
+Type: {message.get("type", "TEXT")}
+Content: {message.get("content", "")}"""
 
 
 def format_custom_item_details(item: dict[str, Any]) -> str:

@@ -8,10 +8,12 @@ import json
 from datetime import datetime
 from typing import Any
 
+from mcp.types import ToolAnnotations
+
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
-from intervals_mcp_server.utils.formatting import format_event_details, format_event_summary
+from intervals_mcp_server.utils.formatting import format_event_compact, format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id, validate_date
 
@@ -19,6 +21,24 @@ from intervals_mcp_server.utils.validation import resolve_activity_type, resolve
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
 config = get_config()
+
+# Known event categories from the Intervals.icu API
+VALID_EVENT_CATEGORIES: set[str] = {
+    "WORKOUT",
+    "RACE_A",
+    "RACE_B",
+    "RACE_C",
+    "NOTE",
+    "PLAN",
+    "HOLIDAY",
+    "SICK",
+    "INJURED",
+    "SET_EFTP",
+    "FITNESS_DAYS",
+    "SEASON_START",
+    "TARGET",
+    "SET_FITNESS",
+}
 
 
 def _prepare_event_data(  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -75,7 +95,7 @@ async def _delete_events_list(
     Returns:
         List of event IDs that failed to delete.
     """
-    failed_events: list[Any] = []
+    failed_events: list[int | str | None] = []
     for event in events:
         result = await make_intervals_request(
             url=f"/athlete/{athlete_id}/events/{event.get('id')}",
@@ -87,12 +107,14 @@ async def _delete_events_list(
     return failed_events
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Events", readOnlyHint=True, destructiveHint=False))
 async def get_events(
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    compact: bool = True,
+    category: str = "",
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -101,6 +123,12 @@ async def get_events(
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
         start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
         end_date: End date in YYYY-MM-DD format (optional, defaults to 30 days from today)
+        compact: If True, return a brief one-line-per-event summary to save tokens (optional, defaults to True)
+        category: Filter events by category. Comma-separated list of categories to include
+            (e.g. "NOTE", "HOLIDAY,RACE_A", "WORKOUT,NOTE"). Valid categories: WORKOUT,
+            RACE_A, RACE_B, RACE_C, NOTE, PLAN, HOLIDAY, SICK, INJURED, SET_EFTP,
+            FITNESS_DAYS, SEASON_START, TARGET, SET_FITNESS. Returns an error if an invalid
+            category is provided. If not provided, all events are returned.
     """
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -113,8 +141,22 @@ async def get_events(
     if not end_date:
         end_date = get_default_future_end_date()
 
+    # Parse category filter
+    category_filter: str | None = None
+    if category:
+        parsed = {c.strip().upper() for c in category.split(",")}
+        invalid = parsed - VALID_EVENT_CATEGORIES
+        if invalid:
+            return (
+                f"Error: Invalid event category: {', '.join(sorted(invalid))}. "
+                f"Valid categories are: {', '.join(sorted(VALID_EVENT_CATEGORIES))}."
+            )
+        category_filter = ",".join(sorted(parsed))
+
     # Call the Intervals.icu API
-    params = {"oldest": start_date, "newest": end_date}
+    params: dict[str, str] = {"oldest": start_date, "newest": end_date}
+    if category_filter:
+        params["category"] = category_filter
 
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
@@ -134,21 +176,22 @@ async def get_events(
     if not events:
         return f"No events found for athlete {athlete_id_to_use} in the specified date range."
 
+    formatter = format_event_compact if compact else format_event_summary
     events_summary = "Events:\n\n"
     for event in events:
         if not isinstance(event, dict):
             continue
 
-        events_summary += format_event_summary(event) + "\n\n"
+        events_summary += formatter(event) + "\n"
 
     return events_summary
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Get Event by ID", readOnlyHint=True, destructiveHint=False))
 async def get_event_by_id(
     event_id: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Get detailed information for a specific event from Intervals.icu
 
@@ -164,7 +207,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/event/{event_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -181,11 +224,11 @@ async def get_event_by_id(
     return format_event_details(result)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Delete Event", readOnlyHint=False, destructiveHint=True))
 async def delete_event(
     event_id: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Delete event for an athlete from Intervals.icu
     Args:
@@ -230,12 +273,12 @@ async def _fetch_events_for_deletion(
     return events, None
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Delete Events by Date Range", readOnlyHint=False, destructiveHint=True))
 async def delete_events_by_date_range(
     start_date: str,
     end_date: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
 ) -> str:
     """Delete events for an athlete from Intervals.icu in the specified date range.
 
@@ -260,17 +303,17 @@ async def delete_events_by_date_range(
     return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(title="Add or Update Event", readOnlyHint=False, destructiveHint=False))
 async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     workout_type: str,
     name: str,
-    athlete_id: str | None = None,
-    api_key: str | None = None,
-    event_id: str | None = None,
-    start_date: str | None = None,
+    athlete_id: str = "",
+    api_key: str = "",
+    event_id: str = "",
+    start_date: str = "",
     workout_doc: WorkoutDoc | None = None,
-    moving_time: int | None = None,
-    distance: int | None = None,
+    moving_time: int = 0,
+    distance: int = 0,
 ) -> str:
     """Post event for an athlete to Intervals.icu this follows the event api from intervals.icu
     If event_id is provided, the event will be updated instead of created.
@@ -285,8 +328,8 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
         name: Name of the activity
         workout_doc: steps as a list of Step objects (optional, but necessary to define workout steps)
         workout_type: Workout type (e.g. Ride, Run, Swim, Walk, Row)
-        moving_time: Total expected moving time of the workout in seconds (optional)
-        distance: Total expected distance of the workout in meters (optional)
+        moving_time: Total expected moving time of the workout in seconds (optional). Use 0 (default) to omit from the request; 0 will not be transmitted to the API.
+        distance: Total expected distance of the workout in meters (optional). Use 0 (default) to omit from the request; 0 will not be transmitted to the API.
 
     Example:
         "workout_doc": {
@@ -346,7 +389,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
 
     try:
         event_data = _prepare_event_data(
-            name, workout_type, start_date, workout_doc, moving_time, distance
+            name, workout_type, start_date, workout_doc, moving_time or None, distance or None
         )
         return await _create_or_update_event_request(
             athlete_id_to_use, api_key, event_data, start_date, event_id
