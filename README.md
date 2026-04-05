@@ -1,220 +1,195 @@
 # Intervals.icu MCP Server
 
-Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the Intervals.icu API. It provides tools for authentication and data retrieval for activities, events, and wellness data.
+Model Context Protocol (MCP) server for connecting Claude and ChatGPT with the Intervals.icu API. It provides tools for retrieving activities, events, wellness data, power curves, and more.
 
-If you find the Model Context Protocol (MCP) server useful, please consider supporting its continued development with a donation.
+If you find the MCP server useful, please consider supporting its continued development with a donation.
 
-## Requirements
+## Prerequisites
+
+Before you begin you'll need your Intervals.icu credentials:
+
+1. **API Key** — Log in to [Intervals.icu](https://intervals.icu), go to **Settings → API**, and generate a new API key.
+2. **Athlete ID** — Visible in the URL when you're logged in, e.g. `https://intervals.icu/athlete/i12345/...` → `i12345`.
+
+## Setup — Deploy to Render (recommended)
+
+The fastest way to get started is to deploy the server to [Render](https://render.com) as a Docker Web Service. No local installation required.
+
+### 1. Create a Web Service on Render
+
+1. Go to [render.com](https://render.com) → **New** → **Web Service**
+2. Connect your GitHub repository (`intervals-mcp-server` or your fork)
+3. Configure the service:
+   - **Name**: `intervals-mcp-server` (or your preferred name)
+   - **Branch**: `main`
+   - **Runtime**: **Docker**
+   - **Instance Type**: Free tier works fine
+
+### 2. Set Environment Variables
+
+In the Render dashboard under **Environment**, add:
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `MCP_TRANSPORT` | `sse` | Enables the SSE transport (exposes `/sse` and `/messages/` endpoints) |
+| `FASTMCP_HOST` | `0.0.0.0` | Bind to all interfaces (required inside Docker) |
+| `FASTMCP_PORT` | `8000` | Port the server listens on |
+| `ATHLETE_ID` | `your_athlete_id` | Your Intervals.icu athlete ID (e.g. `i12345`) |
+| `API_KEY` | `your_api_key` | Your Intervals.icu API key |
+
+### 3. Deploy and Verify
+
+1. Click **Create Web Service** — Render will build the Docker image and deploy
+2. Wait for the build to complete (green status)
+3. Note your service URL: `https://your-service-name.onrender.com`
+4. Test by opening `https://your-service-name.onrender.com/sse` in a browser — you should see a persistent `text/event-stream` connection
+
+## Connecting Claude
+
+1. Open Claude → **Settings** → **Integrations** (or **MCP Servers**)
+2. Click **Add**
+3. Fill in:
+   - **Name:** `Intervals.icu`
+   - **URL:** `https://your-service-name.onrender.com/sse`
+
+Open a new conversation and ask "What MCP tools do you have available?" to confirm the connection.
+
+## Connecting ChatGPT
+
+1. In ChatGPT, open **Settings → Features → Custom MCP Connectors** → **Add**
+2. Fill in:
+   - **Name**: `Intervals.icu`
+   - **MCP Server URL**: `https://your-service-name.onrender.com/sse`
+
+Save the connector and open a new chat. ChatGPT will keep the SSE connection open and POST follow-up requests to the `/messages/` endpoint.
+
+## Available Tools
+
+Once connected, the following tools are available:
+
+- `get_activities` — Retrieve a list of activities
+- `get_activity_details` — Get detailed information for a specific activity
+- `get_activity_intervals` — Get interval data for a specific activity
+- `get_activity_streams` — Get time-series stream data (power, HR, cadence, etc.)
+- `get_activity_histogram` — Get a power, heart rate, or pace histogram (`histogram_type`: `"power"`, `"hr"`, or `"pace"`)
+- `get_athlete_power_curves` — Get best power output curves for selected durations and time periods
+- `get_wellness_data` — Fetch wellness data
+- `get_events` — Retrieve upcoming events (workouts, races, etc.)
+- `get_event_by_id` — Get detailed information for a specific event
+
+## Troubleshooting Render Deployment
+
+- **Service won't start** — Check Render logs for build errors. Ensure all environment variables are set.
+- **Claude/ChatGPT can't connect** — Verify the URL ends with `/sse` and is publicly accessible. Try opening it in a browser.
+- **API errors** — Double-check your `ATHLETE_ID` and `API_KEY` values. Verify your Intervals.icu API key is valid.
+- **Free tier cold starts** — Render free-tier services sleep after inactivity. The first request may take 30–60 seconds to wake up.
+
+---
+
+<details>
+<summary><strong>Local Setup (alternative)</strong></summary>
+
+If you prefer to run the server on your own machine instead of Render, follow the steps below.
+
+### Requirements
 
 - Python 3.12 or higher
-- [Model Context Protocol (MCP) Python SDK](https://github.com/modelcontextprotocol/python-sdk)
-- httpx
-- python-dotenv
+- [uv](https://github.com/astral-sh/uv) (recommended package manager)
 
-## Setup
-
-### 1. Install uv (recommended)
+### 1. Install uv
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 2. Clone this repository
+### 2. Clone and install
 
 ```bash
 git clone https://github.com/mvilanova/intervals-mcp-server.git
 cd intervals-mcp-server
-```
-
-### 3. Create and activate a virtual environment
-
-```bash
-# Create virtual environment with Python 3.12
 uv venv --python 3.12
-
-# Activate virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-.venv\Scripts\activate
-```
-
-### 4. Sync project dependencies
-
-```bash
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 uv sync
 ```
 
-### 5. Set up environment variables
-
-Make a copy of `.env.example` and name it `.env` by running the following command:
+### 3. Set up environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Then edit the `.env` file and set your Intervals.icu athlete id and API key:
+Edit `.env` and fill in your credentials:
 
 ```
 API_KEY=your_intervals_api_key_here
 ATHLETE_ID=your_athlete_id_here
 ```
 
-#### Getting your Intervals.icu API Key
+### Configure Claude Desktop
 
-1. Log in to your Intervals.icu account
-2. Go to Settings > API
-3. Generate a new API key
+1. From the project directory, run:
 
-#### Finding your Athlete ID
+   ```bash
+   mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
+   ```
 
-Your athlete ID is typically visible in the URL when you're logged into Intervals.icu. It looks like:
+2. Your `claude_desktop_config.json` should look like:
 
-- `https://intervals.icu/athlete/i12345/...` where `i12345` is your athlete ID
+   ```json
+   {
+     "mcpServers": {
+       "Intervals.icu": {
+         "command": "/Users/<USERNAME>/.cargo/bin/uv",
+         "args": [
+           "run",
+           "--with", "mcp[cli]",
+           "--with-editable", "/path/to/intervals-mcp-server",
+           "mcp", "run",
+           "/path/to/intervals-mcp-server/src/intervals_mcp_server/server.py"
+         ],
+         "env": {
+           "INTERVALS_API_BASE_URL": "https://intervals.icu/api/v1",
+           "ATHLETE_ID": "<YOUR_ATHLETE_ID>",
+           "API_KEY": "<YOUR_API_KEY>",
+           "LOG_LEVEL": "INFO"
+         }
+       }
+     }
+   }
+   ```
 
-## Updating
-
-This project is actively developed, with new features and fixes added regularly. To stay up to date, follow these steps:
-
-### 1. Pull the latest changes from `main`
-
-> ⚠️ Make sure you don’t have uncommitted changes before running this command.
-
-```bash
-git checkout main && git pull
-```
-
-### 2. Update Python dependencies
-
-Activate your virtual environment and sync dependencies:
-
-```bash
-source .venv/bin/activate
-uv sync
-```
-
-### Troubleshooting
-
-If Claude Desktop fails due to configuration changes, follow these steps:
-
-1. Delete the existing entry in claude_desktop_config.json.
-2. Reconfigure Claude Desktop from the intervals_mcp_server directory:
-
-```bash
-mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
-```
-
-## Usage with Claude
-
-### 1. Configure Claude Desktop
-
-To use this server with Claude Desktop, you need to add it to your Claude Desktop configuration.
-
-1. Run the following from the `intervals_mcp_server` directory to configure Claude Desktop:
-
-```bash
-mcp install src/intervals_mcp_server/server.py --name "Intervals.icu" --with-editable . --env-file .env
-```
-
-2. If you open your Claude Desktop App configuration file `claude_desktop_config.json`, it should look like this:
-
-```json
-{
-  "mcpServers": {
-    "Intervals.icu": {
-      "command": "/Users/<USERNAME>/.cargo/bin/uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp[cli]",
-        "--with-editable",
-        "/path/to/intervals-mcp-server",
-        "mcp",
-        "run",
-        "/path/to/intervals-mcp-server/src/intervals_mcp_server/server.py"
-      ],
-      "env": {
-        "INTERVALS_API_BASE_URL": "https://intervals.icu/api/v1",
-        "ATHLETE_ID": "<YOUR_ATHLETE_ID>",
-        "API_KEY": "<YOUR_API_KEY>",
-        "LOG_LEVEL": "INFO"
-      }
-    }
-  }
-}
-```
-
-Where `/path/to/` is the path to the `intervals-mcp-server` code folder in your system.
-
-If you observe the following error messages when you open Claude Desktop, include the full path to `uv` in the command key in the `claude_desktop_config.json` configuration file. You can get the full path by running `which uv` in the terminal.
-
-```
-2025-04-28T10:21:11.462Z [info] [Intervals.icu MCP Server] Initializing server...
-2025-04-28T10:21:11.477Z [error] [Intervals.icu MCP Server] spawn uv ENOENT
-2025-04-28T10:21:11.477Z [error] [Intervals.icu MCP Server] spawn uv ENOENT
-2025-04-28T10:21:11.481Z [info] [Intervals.icu MCP Server] Server transport closed
-2025-04-28T10:21:11.481Z [info] [Intervals.icu MCP Server] Client transport closed
-```
+   Replace `/path/to/` with the actual path. If you see `spawn uv ENOENT` errors, use the full path from `which uv`.
 
 3. Restart Claude Desktop.
 
-### 2. Use the MCP server with Claude
+### Configure ChatGPT (local SSE)
 
-Once the server is running and Claude Desktop is configured, you can use the following tools to ask questions about your past and future activities, events, and wellness data.
-
-- `get_activities`: Retrieve a list of activities
-- `get_activity_details`: Get detailed information for a specific activity
-- `get_activity_intervals`: Get detailed interval data for a specific activity
-- `get_activity_streams`: Get time-series stream data (power, HR, cadence, etc.) for a specific activity
-- `get_activity_histogram`: Get a power, heart rate, or pace histogram for a specific activity (pass `histogram_type` as `"power"`, `"hr"`, or `"pace"`)
-- `get_athlete_power_curves`: Get best power output curves for selected durations and time periods
-- `get_wellness_data`: Fetch wellness data
-- `get_events`: Retrieve upcoming events (workouts, races, etc.)
-- `get_event_by_id`: Get detailed information for a specific event
-
-## Usage with ChatGPT
-
-ChatGPT’s beta MCP connectors can also talk to this server over the SSE transport.
-
-1. Start the server in SSE mode so it exposes the `/sse` and `/messages/` endpoints:
+1. Start the server in SSE mode:
 
    ```bash
    export FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8765 MCP_TRANSPORT=sse FASTMCP_LOG_LEVEL=INFO
    python src/intervals_mcp_server/server.py
    ```
 
-   The startup log prints the full URLs (for example `http://127.0.0.1:8765/sse`). ChatGPT needs that public URL, so forward the port with a tool such as `ngrok http 8765` if you are not exposing the server directly.
+2. ChatGPT needs a public URL, so forward the port (e.g. `ngrok http 8765`).
 
-2. In ChatGPT, open **Settings → Features → Custom MCP Connectors** and click **Add**. Fill in:
-
+3. In ChatGPT, open **Settings → Features → Custom MCP Connectors** → **Add**:
    - **Name**: `Intervals.icu`
    - **MCP Server URL**: `https://<your-public-host>/sse`
-   - **Authentication**: leave as _No authentication_ unless you have protected your tunnel.
 
-   You can reuse the same `ngrok http 8765` tunnel URL here; just ensure it forwards to the host/port you exported above.
-
-3. Save the connector and open a new chat. ChatGPT will keep the SSE connection open and POST follow-up requests to the `/messages/` endpoint announced by the server. If you restart the MCP server or tunnel, rerun the SSE command and update the connector URL if it changes.
-
-## Development and testing
-
-Install development dependencies and run the test suite with:
+### Updating
 
 ```bash
-uv sync --all-extras
-pytest -v tests
+git checkout main && git pull
+source .venv/bin/activate
+uv sync
 ```
 
-### Running the server locally
+If Claude Desktop fails after an update, delete the entry in `claude_desktop_config.json` and re-run the `mcp install` command above.
 
-To start the server manually (useful when developing or testing), run:
+### Enabling debug logging
 
-```bash
-mcp run src/intervals_mcp_server/server.py
-```
-
-#### Enabling debug logging
-
-To capture server logs for debugging, wrap the command in a bash shell and redirect stderr to a file. Modify your `claude_desktop_config.json` like this:
+Modify `claude_desktop_config.json` to redirect stderr to a log file:
 
 ```json
 {
@@ -236,10 +211,27 @@ To capture server logs for debugging, wrap the command in a bash shell and redir
 }
 ```
 
-Then tail the log file to see output in real-time:
+Then tail the log:
 
 ```bash
 tail -f /path/to/intervals-mcp-server/mcp-server.log
+```
+
+</details>
+
+## Development and testing
+
+Install development dependencies and run the test suite with:
+
+```bash
+uv sync --all-extras
+pytest -v tests
+```
+
+### Running the server locally
+
+```bash
+mcp run src/intervals_mcp_server/server.py
 ```
 
 ## License
