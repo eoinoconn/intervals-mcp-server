@@ -11,6 +11,7 @@ from typing import Any
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
+from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
     format_activity_message,
@@ -25,32 +26,7 @@ from intervals_mcp_server.utils.validation import resolve_athlete_id, resolve_da
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
-# FastMCP dependencies for accessing request headers
-try:
-    from fastmcp.dependencies import CurrentHeaders
-except ImportError:
-    # Fallback for older versions of FastMCP or non-HTTP transports
-    def CurrentHeaders():
-        return {}
-
 config = get_config()
-
-
-def _extract_api_key_from_headers(headers: dict) -> str:
-    """Extract API key from Authorization header.
-    
-    Supports both 'Bearer <api_key>' and '<api_key>' formats.
-    """
-    auth_header = headers.get("authorization", "") or headers.get("Authorization", "")
-    if not auth_header:
-        return ""
-    
-    # Handle 'Bearer <api_key>' format (Claude OAuth token field)
-    if auth_header.startswith("Bearer "):
-        return auth_header[7:]  # Extract token after "Bearer "
-    
-    # Handle direct API key format
-    return auth_header
 
 
 def _parse_activities_from_result(result: Any) -> list[dict[str, Any]]:
@@ -148,7 +124,6 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     limit: int = 10,
     include_unnamed: bool = False,
     compact: bool = True,
-    headers: dict = CurrentHeaders(),
 ) -> str:
     """Get a list of activities for an athlete from Intervals.icu
 
@@ -160,14 +135,9 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
         limit: Maximum number of activities to return (optional, defaults to 10)
         include_unnamed: Whether to include unnamed activities (optional, defaults to False)
         compact: If True, return a brief one-line-per-activity summary to save tokens (optional, defaults to True)
-        headers: Request headers (automatically injected by FastMCP for HTTP transports)
     """
-    # Extract API key from Authorization header if provided via OAuth token field
-    extracted_api_key = _extract_api_key_from_headers(headers)
-    api_key_to_use = extracted_api_key or api_key or config.api_key
-    
-    if not api_key_to_use:
-        return "Error: API key is required. Set API_KEY environment variable or provide via Authorization header."
+    # Use API key from auth header (OAuth token), explicit parameter, or env var
+    api_key_to_use = get_auth_api_key() or api_key
 
     # Resolve athlete ID and date parameters
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -179,7 +149,7 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
     # Fetch more activities if we need to filter out unnamed ones
     api_limit = limit * 3 if not include_unnamed else limit
 
-    # Call the Intervals.icu API with the extracted API key
+    # Call the Intervals.icu API
     params = {"oldest": start_date, "newest": end_date, "limit": api_limit}
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/activities", api_key=api_key_to_use, params=params
@@ -213,20 +183,14 @@ async def get_activities(  # pylint: disable=too-many-arguments,too-many-return-
 
 
 @mcp.tool(annotations=ToolAnnotations(title="Get Activity Details", readOnlyHint=True, destructiveHint=False))
-async def get_activity_details(activity_id: str, api_key: str = "", headers: dict = CurrentHeaders()) -> str:
+async def get_activity_details(activity_id: str, api_key: str = "") -> str:
     """Get detailed information for a specific activity from Intervals.icu
 
     Args:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        headers: Request headers (automatically injected by FastMCP for HTTP transports)
     """
-    # Extract API key from Authorization header if provided via OAuth token field
-    extracted_api_key = _extract_api_key_from_headers(headers)
-    api_key_to_use = extracted_api_key or api_key or config.api_key
-    
-    if not api_key_to_use:
-        return "Error: API key is required. Set API_KEY environment variable or provide via Authorization header."
+    api_key_to_use = get_auth_api_key() or api_key
 
     # Call the Intervals.icu API
     result = await make_intervals_request(url=f"/activity/{activity_id}", api_key=api_key_to_use)
@@ -273,7 +237,8 @@ async def get_activity_intervals(activity_id: str, api_key: str = "") -> str:
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
     # Call the Intervals.icu API
-    result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key)
+    api_key_to_use = get_auth_api_key() or api_key
+    result = await make_intervals_request(url=f"/activity/{activity_id}/intervals", api_key=api_key_to_use)
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
@@ -292,7 +257,7 @@ async def get_activity_intervals(activity_id: str, api_key: str = "") -> str:
     # Fetch activity details to get ignore flags
     ignore_flags_text = ""
     activity_result = await make_intervals_request(
-        url=f"/activity/{activity_id}", api_key=api_key
+        url=f"/activity/{activity_id}", api_key=api_key_to_use
     )
     if isinstance(activity_result, dict) and "error" not in activity_result:
         ignore_flags_text = format_ignore_flags(activity_result)
@@ -338,7 +303,8 @@ async def get_activity_histogram(
         bucket = bucket_size if bucket_size is not None else default_bucket_sizes[histogram_type]
         params = {"bucketSize": bucket}
 
-    result = await make_intervals_request(url=url, api_key=api_key, params=params)
+    api_key_to_use = get_auth_api_key() or api_key
+    result = await make_intervals_request(url=url, api_key=api_key_to_use, params=params)
 
     if isinstance(result, dict) and "error" in result:
         error_message = result.get("message", "Unknown error")
@@ -377,9 +343,10 @@ async def get_activity_streams(
         params["types"] = "time,watts,heartrate,cadence,altitude,distance,velocity_smooth"
 
     # Call the Intervals.icu API
+    api_key_to_use = get_auth_api_key() or api_key
     result = await make_intervals_request(
         url=f"/activity/{activity_id}/streams",
-        api_key=api_key,
+        api_key=api_key_to_use,
         params=params,
     )
 
@@ -436,9 +403,10 @@ async def get_activity_messages(activity_id: str, api_key: str = "") -> str:
         activity_id: The Intervals.icu activity ID
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
+    api_key_to_use = get_auth_api_key() or api_key
     result = await make_intervals_request(
         url=f"/activity/{activity_id}/messages",
-        api_key=api_key,
+        api_key=api_key_to_use,
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -473,9 +441,10 @@ async def add_activity_message(
         content: The message text to add
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
     """
+    api_key_to_use = get_auth_api_key() or api_key
     result = await make_intervals_request(
         url=f"/activity/{activity_id}/messages",
-        api_key=api_key,
+        api_key=api_key_to_use,
         method="POST",
         data={"content": content},
     )

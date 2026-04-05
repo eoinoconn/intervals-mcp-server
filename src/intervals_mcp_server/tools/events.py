@@ -11,6 +11,7 @@ from typing import Any
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
+from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
 from intervals_mcp_server.utils.formatting import format_event_compact, format_event_details, format_event_summary
@@ -20,32 +21,7 @@ from intervals_mcp_server.utils.validation import resolve_activity_type, resolve
 # Import mcp instance from shared module for tool registration
 from intervals_mcp_server.mcp_instance import mcp  # noqa: F401
 
-# FastMCP dependencies for accessing request headers
-try:
-    from fastmcp.dependencies import CurrentHeaders
-except ImportError:
-    # Fallback for older versions of FastMCP or non-HTTP transports
-    def CurrentHeaders():
-        return {}
-
 config = get_config()
-
-
-def _extract_api_key_from_headers(headers: dict) -> str:
-    """Extract API key from Authorization header.
-    
-    Supports both 'Bearer <api_key>' and '<api_key>' formats.
-    """
-    auth_header = headers.get("authorization", "") or headers.get("Authorization", "")
-    if not auth_header:
-        return ""
-    
-    # Handle 'Bearer <api_key>' format (Claude OAuth token field)
-    if auth_header.startswith("Bearer "):
-        return auth_header[7:]  # Extract token after "Bearer "
-    
-    # Handle direct API key format
-    return auth_header
 
 # Known event categories from the Intervals.icu API
 VALID_EVENT_CATEGORIES: set[str] = {
@@ -140,7 +116,6 @@ async def get_events(
     end_date: str = "",
     compact: bool = True,
     category: str = "",
-    headers: dict = CurrentHeaders(),
 ) -> str:
     """Get events for an athlete from Intervals.icu
 
@@ -155,14 +130,9 @@ async def get_events(
             RACE_A, RACE_B, RACE_C, NOTE, PLAN, HOLIDAY, SICK, INJURED, SET_EFTP,
             FITNESS_DAYS, SEASON_START, TARGET, SET_FITNESS. Returns an error if an invalid
             category is provided. If not provided, all events are returned.
-        headers: Request headers (automatically injected by FastMCP for HTTP transports)
     """
-    # Extract API key from Authorization header if provided via OAuth token field
-    extracted_api_key = _extract_api_key_from_headers(headers)
-    api_key_to_use = extracted_api_key or api_key or config.api_key
-    
-    if not api_key_to_use:
-        return "Error: API key is required. Set API_KEY environment variable or provide via Authorization header."
+    # Use API key from auth header (OAuth token), explicit parameter, or env var
+    api_key_to_use = get_auth_api_key() or api_key
 
     # Resolve athlete ID
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
@@ -241,7 +211,7 @@ async def get_event_by_id(
 
     # Call the Intervals.icu API
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=get_auth_api_key() or api_key
     )
 
     if isinstance(result, dict) and "error" in result:
@@ -275,8 +245,9 @@ async def delete_event(
         return error_msg
     if not event_id:
         return "Error: No event ID provided."
+    api_key_to_use = get_auth_api_key() or api_key
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key, method="DELETE"
+        url=f"/athlete/{athlete_id_to_use}/events/{event_id}", api_key=api_key_to_use, method="DELETE"
     )
     if isinstance(result, dict) and "error" in result:
         return f"Error deleting event: {result.get('message')}"
@@ -327,12 +298,12 @@ async def delete_events_by_date_range(
         return error_msg
 
     events, error_msg = await _fetch_events_for_deletion(
-        athlete_id_to_use, api_key, start_date, end_date
+        athlete_id_to_use, get_auth_api_key() or api_key, start_date, end_date
     )
     if error_msg:
         return error_msg
 
-    failed_events = await _delete_events_list(athlete_id_to_use, api_key, events)
+    failed_events = await _delete_events_list(athlete_id_to_use, get_auth_api_key() or api_key, events)
     deleted_count = len(events) - len(failed_events)
     return f"Deleted {deleted_count} events. Failed to delete {len(failed_events)} events: {failed_events}"
 
@@ -426,7 +397,7 @@ async def add_or_update_event(  # pylint: disable=too-many-arguments,too-many-po
             name, workout_type, start_date, workout_doc, moving_time or None, distance or None
         )
         return await _create_or_update_event_request(
-            athlete_id_to_use, api_key, event_data, start_date, event_id
+            athlete_id_to_use, get_auth_api_key() or api_key, event_data, start_date, event_id
         )
     except ValueError as e:
         return f"Error: {e}"

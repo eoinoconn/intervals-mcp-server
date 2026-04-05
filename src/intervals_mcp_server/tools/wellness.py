@@ -7,6 +7,7 @@ This module contains tools for retrieving athlete wellness data.
 from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
+from intervals_mcp_server.auth import get_auth_api_key
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import (
     WELLNESS_FIELDS,
@@ -74,7 +75,7 @@ async def get_wellness_data(
     params = {"oldest": start_date, "newest": end_date}
 
     result = await make_intervals_request(
-        url=f"/athlete/{athlete_id_to_use}/wellness", api_key=api_key, params=params
+        url=f"/athlete/{athlete_id_to_use}/wellness", api_key=get_auth_api_key() or api_key, params=params
     )
 
     if isinstance(result, dict) and "error" in result:
