@@ -12,7 +12,7 @@ from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
+from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date, get_default_start_date
 from intervals_mcp_server.utils.formatting import format_event_compact, format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id, validate_date
@@ -428,3 +428,61 @@ async def _create_or_update_event_request(
     )
     action = "updated" if event_id else "created"
     return _handle_event_response(result, action, athlete_id, start_date)
+
+
+@mcp.tool(annotations=ToolAnnotations(title="Get Seasons", readOnlyHint=True, destructiveHint=False))
+async def get_seasons(
+    athlete_id: str = "",
+    api_key: str = "",
+    num_seasons: int = 10,
+) -> str:
+    """Get all athlete seasons with their start dates from Intervals.icu.
+
+    Seasons in Intervals.icu are represented as SEASON_START events. This tool
+    fetches those events over the last 4 years and returns them sorted by date.
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        num_seasons: Maximum number of seasons to return (optional, defaults to 10)
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    # Search the last 4 years for SEASON_START events
+    start_date = get_default_start_date(days_ago=4 * 365)
+    end_date = get_default_future_end_date()
+
+    params: dict[str, str] = {
+        "oldest": start_date,
+        "newest": end_date,
+        "category": "SEASON_START",
+    }
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching seasons: {error_message}"
+
+    if not result:
+        return f"No seasons found for athlete {athlete_id_to_use}."
+
+    events = result if isinstance(result, list) else []
+
+    if not events:
+        return f"No seasons found for athlete {athlete_id_to_use}."
+
+    # Limit to the requested number of seasons
+    events = events[:num_seasons]
+
+    seasons_summary = "Seasons:\n\n"
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        seasons_summary += format_event_compact(event) + "\n"
+
+    return seasons_summary

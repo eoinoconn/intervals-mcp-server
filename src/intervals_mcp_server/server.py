@@ -29,6 +29,7 @@ Usage:
         - add_activity_message
         - get_events
         - get_event_by_id
+        - get_seasons
         - add_or_update_event
         - delete_event
         - delete_events_by_date_range
@@ -85,6 +86,7 @@ from intervals_mcp_server.tools.events import (  # pylint: disable=wrong-import-
     delete_events_by_date_range,
     get_event_by_id,
     get_events,
+    get_seasons,
 )
 from intervals_mcp_server.tools.wellness import get_wellness_data  # pylint: disable=wrong-import-position  # noqa: E402
 from intervals_mcp_server.tools.athlete import get_athlete_zones  # pylint: disable=wrong-import-position  # noqa: E402
@@ -114,6 +116,7 @@ __all__ = [
     "get_activity_histogram",
     "get_events",
     "get_event_by_id",
+    "get_seasons",
     "delete_event",
     "delete_events_by_date_range",
     "add_or_update_event",

@@ -39,6 +39,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_athlete_zones,
     get_event_by_id,
     get_events,
+    get_seasons,
     get_wellness_data,
     get_custom_items,
     get_custom_item_by_id,
@@ -367,6 +368,88 @@ def test_get_event_by_id(monkeypatch):
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
     assert "Event Details:" in result
     assert "Test Event" in result
+
+
+def test_get_seasons(monkeypatch):
+    """
+    Test get_seasons returns a formatted string containing season start events.
+    """
+    seasons = [
+        {"date": "2024-01-01", "id": "s1", "name": "2024 Season", "category": "SEASON_START"},
+        {"date": "2023-01-01", "id": "s2", "name": "2023 Season", "category": "SEASON_START"},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return seasons
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(get_seasons(athlete_id="1"))
+    assert "Seasons:" in result
+    assert "2024 Season" in result
+    assert "2023 Season" in result
+
+
+def test_get_seasons_no_results(monkeypatch):
+    """
+    Test get_seasons returns a message when no seasons are found.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(get_seasons(athlete_id="1"))
+    assert "No seasons found" in result
+
+
+def test_get_seasons_api_error(monkeypatch):
+    """
+    Test get_seasons handles API errors gracefully.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Unauthorized"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(get_seasons(athlete_id="1"))
+    assert "Error fetching seasons" in result
+
+
+def test_get_seasons_passes_category_filter(monkeypatch):
+    """
+    Test get_seasons passes SEASON_START category to the API.
+    """
+    captured_kwargs: dict = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return [{"date": "2024-01-01", "id": "s1", "name": "Season", "category": "SEASON_START"}]
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    asyncio.run(get_seasons(athlete_id="1"))
+    assert captured_kwargs.get("params", {}).get("category") == "SEASON_START"
+
+
+def test_get_seasons_respects_num_seasons(monkeypatch):
+    """
+    Test get_seasons limits the number of returned seasons.
+    """
+    seasons = [
+        {"date": f"202{i}-01-01", "id": f"s{i}", "name": f"Season {i}", "category": "SEASON_START"}
+        for i in range(5)
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return seasons
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(get_seasons(athlete_id="1", num_seasons=2))
+    assert "Season 0" in result
+    assert "Season 1" in result
+    assert "Season 2" not in result
 
 
 def test_get_wellness_data(monkeypatch):
