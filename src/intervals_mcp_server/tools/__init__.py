@@ -21,6 +21,7 @@ from intervals_mcp_server.tools.events import (  # noqa: F401
     delete_events_by_date_range,
     get_event_by_id,
     get_events,
+    get_races,
 )
 from intervals_mcp_server.tools.athlete import get_athlete_zones  # noqa: F401
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
@@ -49,6 +50,7 @@ __all__ = [
     "get_activity_intervals",
     "get_activity_streams",
     "get_events",
+    "get_races",
     "get_event_by_id",
     "delete_event",
     "delete_events_by_date_range",

@@ -107,6 +107,77 @@ async def _delete_events_list(
     return failed_events
 
 
+RACE_CATEGORIES = "RACE_A,RACE_B,RACE_C"
+
+
+@mcp.tool(annotations=ToolAnnotations(title="Get Races", readOnlyHint=True, destructiveHint=False))
+async def get_races(
+    athlete_id: str = "",
+    api_key: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    compact: bool = True,
+) -> str:
+    """Get races for an athlete from Intervals.icu.
+
+    Retrieves all race events (A, B, and C priority) over a date range.
+    Defaults to a one-year window (today to 365 days ahead) which is larger
+    than other tools because races are typically planned well in advance.
+
+    Args:
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+        start_date: Start date in YYYY-MM-DD format (optional, defaults to today)
+        end_date: End date in YYYY-MM-DD format (optional, defaults to 365 days from today)
+        compact: If True, return a brief one-line-per-event summary to save tokens (optional, defaults to True)
+    """
+    # Resolve athlete ID
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    # Parse date parameters (races use a larger default window of 1 year)
+    if not start_date:
+        start_date = get_default_end_date()
+    if not end_date:
+        end_date = get_default_future_end_date(days_ahead=365)
+
+    # Call the Intervals.icu API with race category filter
+    params: dict[str, str] = {
+        "oldest": start_date,
+        "newest": end_date,
+        "category": RACE_CATEGORIES,
+    }
+
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/events", api_key=api_key, params=params
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        error_message = result.get("message", "Unknown error")
+        return f"Error fetching races: {error_message}"
+
+    # Format the response
+    if not result:
+        return f"No races found for athlete {athlete_id_to_use} in the specified date range."
+
+    # Ensure result is a list
+    events = result if isinstance(result, list) else []
+
+    if not events:
+        return f"No races found for athlete {athlete_id_to_use} in the specified date range."
+
+    formatter = format_event_compact if compact else format_event_summary
+    races_summary = "Races:\n\n"
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+
+        races_summary += formatter(event) + "\n"
+
+    return races_summary
+
+
 @mcp.tool(annotations=ToolAnnotations(title="Get Events", readOnlyHint=True, destructiveHint=False))
 async def get_events(
     athlete_id: str = "",

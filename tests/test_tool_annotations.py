@@ -31,6 +31,7 @@ EXPECTED_ANNOTATIONS = {
     "get_activity_messages": {"title": "Get Activity Messages", "readOnlyHint": True, "destructiveHint": False},
     "add_activity_message": {"title": "Add Activity Message", "readOnlyHint": False, "destructiveHint": False},
     "get_events": {"title": "Get Events", "readOnlyHint": True, "destructiveHint": False},
+    "get_races": {"title": "Get Races", "readOnlyHint": True, "destructiveHint": False},
     "get_event_by_id": {"title": "Get Event by ID", "readOnlyHint": True, "destructiveHint": False},
     "add_or_update_event": {"title": "Add or Update Event", "readOnlyHint": False, "destructiveHint": False},
     "delete_event": {"title": "Delete Event", "readOnlyHint": False, "destructiveHint": True},

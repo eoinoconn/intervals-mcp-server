@@ -39,6 +39,7 @@ from intervals_mcp_server.server import (  # pylint: disable=wrong-import-positi
     get_athlete_zones,
     get_event_by_id,
     get_events,
+    get_races,
     get_wellness_data,
     get_custom_items,
     get_custom_item_by_id,
@@ -367,6 +368,101 @@ def test_get_event_by_id(monkeypatch):
     result = asyncio.run(get_event_by_id("e1", athlete_id="1"))
     assert "Event Details:" in result
     assert "Test Event" in result
+
+
+def test_get_races(monkeypatch):
+    """
+    Test get_races returns a formatted string containing race events.
+    """
+    races = [
+        {"date": "2024-06-01", "id": "r1", "name": "Spring Marathon", "category": "RACE_A"},
+        {"date": "2024-09-15", "id": "r2", "name": "Autumn 10K", "category": "RACE_B"},
+        {"date": "2024-11-01", "id": "r3", "name": "Fun Run", "category": "RACE_C"},
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return races
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_races(athlete_id="1", start_date="2024-01-01", end_date="2024-12-31")
+    )
+    assert "Races:" in result
+    assert "Spring Marathon" in result
+    assert "Autumn 10K" in result
+    assert "Fun Run" in result
+
+
+def test_get_races_passes_race_categories(monkeypatch):
+    """
+    Test get_races passes the RACE_A, RACE_B, RACE_C category filter to the API.
+    """
+    captured_kwargs: dict = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return [{"date": "2024-06-01", "id": "r1", "name": "Big Race", "category": "RACE_A"}]
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_races(athlete_id="1", start_date="2024-01-01", end_date="2024-12-31")
+    )
+    assert "Big Race" in result
+    assert captured_kwargs["params"]["category"] == "RACE_A,RACE_B,RACE_C"
+
+
+def test_get_races_no_results(monkeypatch):
+    """
+    Test get_races returns a no-match message when no races are found.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_races(athlete_id="1", start_date="2024-01-01", end_date="2024-12-31")
+    )
+    assert "No races found" in result
+
+
+def test_get_races_api_error(monkeypatch):
+    """
+    Test get_races returns an error message when the API returns an error.
+    """
+    async def fake_request(*_args, **_kwargs):
+        return {"error": True, "message": "Unauthorized"}
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    result = asyncio.run(
+        get_races(athlete_id="1", start_date="2024-01-01", end_date="2024-12-31")
+    )
+    assert "Error fetching races" in result
+
+
+def test_get_races_default_dates(monkeypatch):
+    """
+    Test get_races uses default date range of today to 365 days ahead when no dates are provided.
+    """
+    from datetime import datetime, timedelta
+
+    captured_kwargs: dict = {}
+
+    async def fake_request(*_args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr("intervals_mcp_server.tools.events.make_intervals_request", fake_request)
+    asyncio.run(get_races(athlete_id="1"))
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    future = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
+    assert captured_kwargs["params"]["oldest"] == today
+    assert captured_kwargs["params"]["newest"] == future
 
 
 def test_get_wellness_data(monkeypatch):
