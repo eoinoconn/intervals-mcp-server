@@ -78,7 +78,17 @@ def _handle_event_response(
     if not result:
         return f"No events {action} for athlete {athlete_id}."
     if isinstance(result, dict):
-        return f"Successfully {action} event id: {result.get('id')}"
+        msg = f"Successfully {action} event id: {result.get('id')}"
+        training_load = result.get("icu_training_load")
+        atl = result.get("icu_atl")
+        ctl = result.get("icu_ctl")
+        if training_load is not None:
+            msg += f", training load: {training_load}"
+        if atl is not None:
+            msg += f", fatigue (ATL): {atl}"
+        if ctl is not None:
+            msg += f", fitness (CTL): {ctl}"
+        return msg
     return f"Event {action} successfully at {start_date}"
 
 

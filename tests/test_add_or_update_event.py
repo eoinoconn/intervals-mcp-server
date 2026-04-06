@@ -45,6 +45,9 @@ class FakeRequest:
             "category": "WORKOUT",
             "name": "test",
             "type": "Ride",
+            "icu_training_load": 75,
+            "icu_atl": 60,
+            "icu_ctl": 50,
         }
 
     async def __call__(self, *args, **kwargs):
@@ -784,3 +787,54 @@ def test_add_event_with_pace_zone(monkeypatch):
     assert "Successfully created event id:" in result
     desc = fake.last_data["description"]
     assert "Z2" in desc
+
+
+# ---------------------------------------------------------------------------
+# Training context in response
+# ---------------------------------------------------------------------------
+
+
+def test_response_includes_training_context(monkeypatch):
+    """Success message includes training load, fatigue (ATL), and fitness (CTL)."""
+    fake = FakeRequest()
+    _patch_request(monkeypatch, fake)
+
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2026-03-11",
+            name="Sweet Spot Ride",
+            workout_type="Ride",
+        )
+    )
+
+    assert "training load: 75" in result
+    assert "fatigue (ATL): 60" in result
+    assert "fitness (CTL): 50" in result
+
+
+def test_response_omits_missing_training_context(monkeypatch):
+    """When API response lacks training context fields, they are omitted from message."""
+    fake = FakeRequest(response={
+        "id": "e999",
+        "start_date_local": "2026-03-11T00:00:00",
+        "category": "WORKOUT",
+        "name": "test",
+        "type": "Ride",
+    })
+    _patch_request(monkeypatch, fake)
+
+    result = asyncio.run(
+        add_or_update_event(
+            athlete_id="i1",
+            start_date="2026-03-11",
+            name="Simple Ride",
+            workout_type="Ride",
+        )
+    )
+
+    assert "Successfully created event id:" in result
+    assert "e999" in result
+    assert "training load" not in result
+    assert "fatigue" not in result
+    assert "fitness" not in result
