@@ -472,7 +472,6 @@ async def get_seasons(
         return f"No seasons found for athlete {athlete_id_to_use}."
 
     events = result if isinstance(result, list) else []
-
     if not events:
         return f"No seasons found for athlete {athlete_id_to_use}."
 
