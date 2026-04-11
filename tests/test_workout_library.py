@@ -82,6 +82,37 @@ SAMPLE_WORKOUT_B = {
 }
 
 
+SAMPLE_SHARED_FOLDER = {
+    "id": 30,
+    "name": "Coach Shared Plan",
+    "type": "PLAN",
+    "num_workouts": 2,
+    "visibility": "PUBLIC",
+    "description": "Shared by coach",
+    "activity_types": ["Run"],
+    "children": [
+        {
+            "id": 100,
+            "name": "Shared Tempo Run",
+            "type": "Run",
+            "folder_id": 30,
+            "moving_time": 2400,
+            "icu_training_load": 50,
+            "tags": ["tempo"],
+        },
+        {
+            "id": 101,
+            "name": "Shared Easy Run",
+            "type": "Run",
+            "folder_id": 30,
+            "moving_time": 3600,
+            "icu_training_load": 30,
+            "tags": [],
+        },
+    ],
+}
+
+
 def _patch_workout_lib(monkeypatch, fake_request):
     """Patch make_intervals_request in the current workout_library module (handles reloads)."""
     mod = sys.modules.get("intervals_mcp_server.tools.workout_library")
@@ -163,9 +194,11 @@ def test_list_workouts_full(monkeypatch):
 
 
 def test_list_workouts_folder_filter(monkeypatch):
-    """folder_id filters results client-side."""
-    async def fake_request(*_a, **_kw):
-        return [SAMPLE_WORKOUT_A, SAMPLE_WORKOUT_B]
+    """folder_id filters own workouts client-side."""
+    async def fake_request(*_a, **kw):
+        if "/workouts" in kw.get("url", ""):
+            return [SAMPLE_WORKOUT_A, SAMPLE_WORKOUT_B]
+        return []
 
     _patch_workout_lib(monkeypatch, fake_request)
     result = asyncio.run(_get_tool("list_workouts")(athlete_id="i1", folder_id=10))
@@ -175,14 +208,37 @@ def test_list_workouts_folder_filter(monkeypatch):
 
 
 def test_list_workouts_folder_filter_no_match(monkeypatch):
-    """folder_id that matches nothing returns human message."""
-    async def fake_request(*_a, **_kw):
-        return [SAMPLE_WORKOUT_A]
+    """folder_id that matches nothing in either endpoint returns human message."""
+    async def fake_request(*_a, **kw):
+        url = kw.get("url", "")
+        if "/workouts" in url:
+            return [SAMPLE_WORKOUT_A]
+        if "/folders" in url:
+            return [SAMPLE_FOLDER]  # folder 10, no folder 999
+        return []
 
     _patch_workout_lib(monkeypatch, fake_request)
     result = asyncio.run(_get_tool("list_workouts")(athlete_id="i1", folder_id=999))
     assert "No workouts found" in result
     assert "folder 999" in result
+
+
+def test_list_workouts_shared_folder(monkeypatch):
+    """Shared folder workouts are returned when own workouts have no match."""
+    async def fake_request(*_a, **kw):
+        url = kw.get("url", "")
+        if "/workouts" in url:
+            return [SAMPLE_WORKOUT_A]  # own workouts, none in folder 30
+        if "/folders" in url:
+            return [SAMPLE_SHARED_FOLDER]  # shared folder 30 with children
+        return []
+
+    _patch_workout_lib(monkeypatch, fake_request)
+    result = asyncio.run(_get_tool("list_workouts")(athlete_id="i1", folder_id=30))
+    workouts = json.loads(result)
+    assert len(workouts) == 2
+    assert workouts[0]["name"] == "Shared Tempo Run"
+    assert workouts[1]["name"] == "Shared Easy Run"
 
 
 def test_list_workouts_error(monkeypatch):

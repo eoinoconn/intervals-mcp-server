@@ -128,6 +128,35 @@ async def get_workout_folders(
     return json.dumps(folders, separators=(",", ":"))
 
 
+def _find_folder_children(
+    folders: list[dict[str, Any]], target_id: int
+) -> list[dict[str, Any]] | None:
+    """Recursively search *folders* for one whose ``id`` equals *target_id*.
+
+    Returns the folder's ``children`` list (which contains workout records) or
+    ``None`` when the folder is not found.  Folders may be nested, so this
+    performs a depth-first search through each folder's ``children`` that are
+    themselves folders (dicts with an ``id`` key and their own ``children``).
+    """
+    for folder in folders:
+        if not isinstance(folder, dict):
+            continue
+        if folder.get("id") == target_id:
+            children = folder.get("children")
+            if isinstance(children, list):
+                return [c for c in children if isinstance(c, dict)]
+            return []
+        # Recurse into nested folders
+        nested = folder.get("children")
+        if isinstance(nested, list):
+            sub_folders = [c for c in nested if isinstance(c, dict) and "children" in c]
+            if sub_folders:
+                found = _find_folder_children(sub_folders, target_id)
+                if found is not None:
+                    return found
+    return None
+
+
 @mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, title="List Workouts")
 )
@@ -142,13 +171,18 @@ async def list_workouts(
     Use ``get_workout_folders`` first to discover folder IDs, then pass a
     ``folder_id`` to filter results to a specific folder.
 
+    Supports both the athlete's own workouts and shared workouts.  When a
+    ``folder_id`` is provided, the tool also queries the folders endpoint so
+    that workouts inside shared folders/plans are included.
+
     ``workout_doc`` (step-by-step structure) is never included in list output.
     Use ``get_workout(workout_id)`` to expand a specific workout.
 
     Args:
         athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
         api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
-        folder_id: Filter to workouts in this folder only (optional)
+        folder_id: Filter to workouts in this folder only (optional).
+                   Works for both own and shared folders.
         compact: If True (default), return a brief summary per workout to save tokens.
                  Full mode adds description, distance, indoor, color, and updated fields.
     """
@@ -156,6 +190,7 @@ async def list_workouts(
     if error_msg:
         return error_msg
 
+    # Always fetch the athlete's own workouts from /workouts
     result = await make_intervals_request(
         url=f"/athlete/{athlete_id_to_use}/workouts",
         api_key=api_key,
@@ -164,14 +199,29 @@ async def list_workouts(
     if isinstance(result, dict) and "error" in result:
         return f"Error fetching workouts: {result.get('message')}"
 
-    if not result or not isinstance(result, list):
-        return f"No workouts found for athlete {athlete_id_to_use}."
+    own_workouts: list[dict[str, Any]] = []
+    if isinstance(result, list):
+        own_workouts = [w for w in result if isinstance(w, dict)]
 
-    workouts: list[dict[str, Any]] = [w for w in result if isinstance(w, dict)]
+    workouts: list[dict[str, Any]]
 
-    # Client-side folder filter
     if folder_id is not None:
-        workouts = [w for w in workouts if w.get("folder_id") == folder_id]
+        # Filter own workouts by folder
+        workouts = [w for w in own_workouts if w.get("folder_id") == folder_id]
+
+        # If no own workouts matched, the folder may be shared.
+        # Fetch the folders endpoint and look for the target folder's children.
+        if not workouts:
+            folders_result = await make_intervals_request(
+                url=f"/athlete/{athlete_id_to_use}/folders",
+                api_key=api_key,
+            )
+            if isinstance(folders_result, list):
+                children = _find_folder_children(folders_result, folder_id)
+                if children is not None:
+                    workouts = children
+    else:
+        workouts = own_workouts
 
     if not workouts:
         msg = f"No workouts found for athlete {athlete_id_to_use}"
