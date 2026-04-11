@@ -21,6 +21,7 @@ import intervals_mcp_server.tools.custom_items  # noqa: E402, F401
 import intervals_mcp_server.tools.athlete  # noqa: E402, F401
 import intervals_mcp_server.tools.power_curves  # noqa: E402, F401
 import intervals_mcp_server.tools.training_summary  # noqa: E402, F401
+import intervals_mcp_server.tools.workout_library  # noqa: E402, F401
 
 
 EXPECTED_ANNOTATIONS = {
@@ -45,6 +46,11 @@ EXPECTED_ANNOTATIONS = {
     "get_training_summary": {"title": "Get Training Summary", "readOnlyHint": True, "destructiveHint": False},
     "get_athlete_zones": {"title": "Get Athlete Zones", "readOnlyHint": True, "destructiveHint": False},
     "get_athlete_power_curves": {"title": "Get Athlete Power Curves", "readOnlyHint": True, "destructiveHint": False},
+    "get_workout_folders": {"title": "Get Workout Folders", "readOnlyHint": True, "destructiveHint": False},
+    "list_workouts": {"title": "List Workouts", "readOnlyHint": True, "destructiveHint": False},
+    "get_workout": {"title": "Get Workout", "readOnlyHint": True, "destructiveHint": False},
+    "create_workout": {"title": "Create Library Workout", "readOnlyHint": False, "destructiveHint": False},
+    "update_workout": {"title": "Update Library Workout", "readOnlyHint": False, "destructiveHint": False},
 }
 
 

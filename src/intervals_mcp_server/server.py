@@ -39,6 +39,11 @@ Usage:
         - create_custom_item
         - update_custom_item
         - delete_custom_item
+        - get_workout_folders
+        - list_workouts
+        - get_workout
+        - create_workout
+        - update_workout
 
     See the README for more details on configuration and usage.
 """
@@ -98,6 +103,13 @@ from intervals_mcp_server.tools.custom_items import (  # pylint: disable=wrong-i
     get_custom_items,
     update_custom_item,
 )
+from intervals_mcp_server.tools.workout_library import (  # pylint: disable=wrong-import-position  # noqa: E402
+    get_workout_folders,
+    list_workouts,
+    get_workout,
+    create_workout,
+    update_workout,
+)
 
 # Import resource modules to register them (resources register themselves via @mcp.resource() decorators)
 from intervals_mcp_server.resources.guide import coaching_context_protocol  # pylint: disable=wrong-import-position  # noqa: E402
@@ -129,6 +141,11 @@ __all__ = [
     "create_custom_item",
     "update_custom_item",
     "delete_custom_item",
+    "get_workout_folders",
+    "list_workouts",
+    "get_workout",
+    "create_workout",
+    "update_workout",
     "coaching_context_protocol",
 ]
 

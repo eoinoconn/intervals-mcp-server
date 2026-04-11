@@ -25,6 +25,13 @@ from intervals_mcp_server.tools.events import (  # noqa: F401
 )
 from intervals_mcp_server.tools.athlete import get_athlete_zones  # noqa: F401
 from intervals_mcp_server.tools.wellness import get_wellness_data  # noqa: F401
+from intervals_mcp_server.tools.workout_library import (  # noqa: F401
+    get_workout_folders,
+    list_workouts,
+    get_workout,
+    create_workout,
+    update_workout,
+)
 
 
 def register_tools(mcp_instance: FastMCP) -> None:
@@ -58,4 +65,9 @@ __all__ = [
     "get_wellness_data",
     "get_athlete_zones",
     "get_training_summary",
+    "get_workout_folders",
+    "list_workouts",
+    "get_workout",
+    "create_workout",
+    "update_workout",
 ]

@@ -100,6 +100,13 @@ Once connected, the following tools are available:
 - `update_custom_item` — Update an existing custom item
 - `delete_custom_item` — Delete a custom item
 
+**Workout Library**
+- `get_workout_folders` — Get workout library folder metadata (IDs, names, types)
+- `list_workouts` — List workouts in the library, optionally filtered by folder
+- `get_workout` — Get full workout detail including step-by-step structure
+- `create_workout` — Create a new workout in a library folder
+- `update_workout` — Update an existing library workout
+
 ## Troubleshooting Render Deployment
 
 - **Service won't start** — Check Render logs for build errors. Ensure all environment variables are set.
