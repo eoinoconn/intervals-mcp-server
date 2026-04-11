@@ -223,7 +223,7 @@ def test_list_workouts_folder_filter_no_match(monkeypatch):
     assert "folder 999" in result
 
 
-def test_list_workouts_shared_folder(monkeypatch):
+def test_list_workouts_shared_folder_fallback(monkeypatch):
     """Shared folder workouts are returned when own workouts have no match."""
     async def fake_request(*_a, **kw):
         url = kw.get("url", "")

@@ -203,7 +203,7 @@ async def list_workouts(
     if isinstance(result, list):
         own_workouts = [w for w in result if isinstance(w, dict)]
 
-    workouts: list[dict[str, Any]]
+    workouts: list[dict[str, Any]] = []
 
     if folder_id is not None:
         # Filter own workouts by folder
