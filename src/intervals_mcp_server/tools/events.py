@@ -12,7 +12,7 @@ from mcp.types import ToolAnnotations
 
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
-from intervals_mcp_server.utils.dates import get_default_end_date, get_default_future_end_date
+from intervals_mcp_server.utils.dates import get_date_days_ahead, get_todays_date
 from intervals_mcp_server.utils.formatting import format_event_compact, format_event_details, format_event_summary
 from intervals_mcp_server.utils.types import WorkoutDoc
 from intervals_mcp_server.utils.validation import resolve_activity_type, resolve_athlete_id, validate_date
@@ -138,9 +138,9 @@ async def get_races(
 
     # Parse date parameters (races use a larger default window of 1 year)
     if not start_date:
-        start_date = get_default_end_date()
+        start_date = get_todays_date()
     if not end_date:
-        end_date = get_default_future_end_date(days_ahead=365)
+        end_date = get_date_days_ahead(days_ahead=365)
 
     # Call the Intervals.icu API with race category filter
     params: dict[str, str] = {
@@ -208,9 +208,9 @@ async def get_events(
 
     # Parse date parameters (events use different defaults)
     if not start_date:
-        start_date = get_default_end_date()
+        start_date = get_todays_date()
     if not end_date:
-        end_date = get_default_future_end_date()
+        end_date = get_date_days_ahead()
 
     # Parse category filter
     category_filter: str | None = None

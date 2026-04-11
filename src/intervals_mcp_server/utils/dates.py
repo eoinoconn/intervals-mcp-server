@@ -7,6 +7,21 @@ This module provides helper functions for date parsing and default date calculat
 from datetime import datetime, timedelta
 
 
+def get_todays_date() -> str:
+    """Get today's date string in YYYY-MM-DD format."""
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def get_date_days_ago(days_ago: int = 30) -> str:
+    """Get a date string in YYYY-MM-DD format for N days ago."""
+    return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+
+
+def get_date_days_ahead(days_ahead: int = 30) -> str:
+    """Get a date string in YYYY-MM-DD format for N days ahead."""
+    return (datetime.now() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+
 def get_default_start_date(days_ago: int = 30) -> str:
     """
     Get a default start date string in YYYY-MM-DD format.
@@ -17,7 +32,7 @@ def get_default_start_date(days_ago: int = 30) -> str:
     Returns:
         Date string in YYYY-MM-DD format.
     """
-    return (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+    return get_date_days_ago(days_ago)
 
 
 def get_default_end_date() -> str:
@@ -27,7 +42,7 @@ def get_default_end_date() -> str:
     Returns:
         Date string in YYYY-MM-DD format.
     """
-    return datetime.now().strftime("%Y-%m-%d")
+    return get_todays_date()
 
 
 def get_default_future_end_date(days_ahead: int = 30) -> str:
@@ -40,7 +55,7 @@ def get_default_future_end_date(days_ahead: int = 30) -> str:
     Returns:
         Date string in YYYY-MM-DD format.
     """
-    return (datetime.now() + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+    return get_date_days_ahead(days_ahead)
 
 
 def parse_date_range(
@@ -58,7 +73,7 @@ def parse_date_range(
         Tuple of (start_date, end_date) as strings in YYYY-MM-DD format.
     """
     if not start_date:
-        start_date = get_default_start_date(default_start_days_ago)
+        start_date = get_date_days_ago(default_start_days_ago)
     if not end_date:
-        end_date = get_default_end_date()
+        end_date = get_todays_date()
     return start_date, end_date

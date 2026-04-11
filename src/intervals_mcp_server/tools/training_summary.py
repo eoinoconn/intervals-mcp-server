@@ -16,7 +16,7 @@ from mcp.types import ToolAnnotations
 from intervals_mcp_server.api.client import make_intervals_request
 from intervals_mcp_server.config import get_config
 from intervals_mcp_server.utils.formatting import set_if, strip_nulls
-from intervals_mcp_server.utils.dates import get_default_future_end_date, get_default_start_date
+from intervals_mcp_server.utils.dates import get_date_days_ahead, get_date_days_ago
 from intervals_mcp_server.utils.validation import resolve_athlete_id, validate_date
 
 # Import mcp instance from shared module for tool registration
@@ -492,9 +492,9 @@ async def get_training_summary(
 
     # Resolve dates (default: 30 days back, 30 days forward)
     if not start_date:
-        start_date = get_default_start_date()
+        start_date = get_date_days_ago(days_ago=30)
     if not end_date:
-        end_date = get_default_future_end_date()
+        end_date = get_date_days_ahead(days_ahead=30)
 
     # Validate dates
     try:
