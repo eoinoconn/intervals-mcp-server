@@ -54,6 +54,41 @@ mypy src tests
 uv run --locked pytest
 ```
 
+## Changelog and versioning
+
+This project keeps a `CHANGELOG.md` in the repository root, formatted according to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) (`MAJOR.MINOR.PATCH`).
+
+### When to update the changelog
+
+Every pull request that changes user-facing behaviour **must** add an entry under the `[Unreleased]` section of `CHANGELOG.md`. Group entries using the standard headings:
+
+* **Added** — new features or tools.
+* **Changed** — changes to existing functionality.
+* **Deprecated** — features that will be removed in the future.
+* **Removed** — features that have been removed.
+* **Fixed** — bug fixes.
+* **Security** — vulnerability patches.
+
+Documentation-only or CI-only changes do not require a changelog entry.
+
+### When to increment the version number
+
+Version bumps happen at **release time**, not in every PR. When preparing a release:
+
+1. Move everything under `[Unreleased]` into a new `[X.Y.Z] - YYYY-MM-DD` section.
+2. Update the `version` field in `pyproject.toml` to match.
+3. Commit both changes together with a message like `Release vX.Y.Z`.
+
+Use the following guidelines to decide which part of the version to increment:
+
+| Change type | Bump | Example |
+|---|---|---|
+| Breaking API/behaviour change | **MAJOR** | `0.x.y → 1.0.0` |
+| New feature, backward-compatible | **MINOR** | `0.1.0 → 0.2.0` |
+| Bug fix, patch, or minor tweak | **PATCH** | `0.1.0 → 0.1.1` |
+
+> While the project is in the `0.x` range, minor version bumps may include breaking changes.
+
 ## Pull request guidelines
 
 * Use concise commit messages.
