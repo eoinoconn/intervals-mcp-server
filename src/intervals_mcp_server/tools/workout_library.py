@@ -76,11 +76,16 @@ def _strip_folder(folder: dict[str, Any], requesting_athlete_id: str = "") -> di
     When *requesting_athlete_id* is provided the returned dict includes a
     ``shared`` boolean that is ``True`` when the folder's ``athlete_id``
     differs from the requesting athlete (i.e. the folder is not owned by the
-    user).
+    user).  When the comparison cannot be made the field defaults to ``False``.
     """
     result = _pick_fields(folder, _FOLDER_FIELDS)
-    if requesting_athlete_id and "athlete_id" in folder:
-        result["shared"] = str(folder["athlete_id"]) != requesting_athlete_id
+    if requesting_athlete_id:
+        folder_owner = folder.get("athlete_id")
+        result["shared"] = (
+            str(folder_owner) != requesting_athlete_id
+            if folder_owner is not None
+            else False
+        )
     return result
 
 
