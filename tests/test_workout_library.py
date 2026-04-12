@@ -51,6 +51,7 @@ SAMPLE_FOLDER = {
     "visibility": "PRIVATE",
     "description": "Base building plans",
     "activity_types": ["Ride"],
+    "athlete_id": "i1",
     "children": [{"id": 99, "name": "should be stripped"}],
 }
 
@@ -90,6 +91,7 @@ SAMPLE_SHARED_FOLDER = {
     "visibility": "PUBLIC",
     "description": "Shared by coach",
     "activity_types": ["Run"],
+    "athlete_id": "i_coach",
     "children": [
         {
             "id": 100,
@@ -127,17 +129,21 @@ def _patch_workout_lib(monkeypatch, fake_request):
 
 
 def test_get_workout_folders_success(monkeypatch):
-    """Folders are returned with children stripped."""
+    """Folders are returned with children stripped and shared flag."""
     async def fake_request(*_a, **_kw):
-        return [SAMPLE_FOLDER]
+        return [SAMPLE_FOLDER, SAMPLE_SHARED_FOLDER]
 
     _patch_workout_lib(monkeypatch, fake_request)
     result = asyncio.run(_get_tool("get_workout_folders")(athlete_id="i1"))
     folders = json.loads(result)
-    assert len(folders) == 1
+    assert len(folders) == 2
     assert folders[0]["id"] == 10
     assert "children" not in folders[0]
     assert folders[0]["name"] == "Sweet Spot Plans"
+    assert folders[0]["shared"] is False
+    # Shared folder owned by a different athlete
+    assert folders[1]["id"] == 30
+    assert folders[1]["shared"] is True
 
 
 def test_get_workout_folders_empty(monkeypatch):
@@ -224,7 +230,7 @@ def test_list_workouts_folder_filter_no_match(monkeypatch):
 
 
 def test_list_workouts_shared_folder_fallback(monkeypatch):
-    """Shared folder workouts are returned when own workouts have no match."""
+    """Shared folder workouts are returned with shared indicator."""
     async def fake_request(*_a, **kw):
         url = kw.get("url", "")
         if "/workouts" in url:
@@ -235,7 +241,9 @@ def test_list_workouts_shared_folder_fallback(monkeypatch):
 
     _patch_workout_lib(monkeypatch, fake_request)
     result = asyncio.run(_get_tool("list_workouts")(athlete_id="i1", folder_id=30))
-    workouts = json.loads(result)
+    data = json.loads(result)
+    assert data["shared"] is True
+    workouts = data["workouts"]
     assert len(workouts) == 2
     assert workouts[0]["name"] == "Shared Tempo Run"
     assert workouts[1]["name"] == "Shared Easy Run"

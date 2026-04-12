@@ -70,9 +70,18 @@ def _pick_fields(record: dict[str, Any], fields: list[str]) -> dict[str, Any]:
     return result
 
 
-def _strip_folder(folder: dict[str, Any]) -> dict[str, Any]:
-    """Strip children from a folder record and return only metadata fields."""
-    return _pick_fields(folder, _FOLDER_FIELDS)
+def _strip_folder(folder: dict[str, Any], requesting_athlete_id: str = "") -> dict[str, Any]:
+    """Strip children from a folder record and return only metadata fields.
+
+    When *requesting_athlete_id* is provided the returned dict includes a
+    ``shared`` boolean that is ``True`` when the folder's ``athlete_id``
+    differs from the requesting athlete (i.e. the folder is not owned by the
+    user).
+    """
+    result = _pick_fields(folder, _FOLDER_FIELDS)
+    if requesting_athlete_id and "athlete_id" in folder:
+        result["shared"] = str(folder["athlete_id"]) != requesting_athlete_id
+    return result
 
 
 @mcp.tool(
@@ -116,9 +125,9 @@ async def get_workout_folders(
 
     folders: list[dict[str, Any]]
     if isinstance(result, list):
-        folders = [_strip_folder(f) for f in result if isinstance(f, dict)]
+        folders = [_strip_folder(f, requesting_athlete_id=athlete_id_to_use) for f in result if isinstance(f, dict)]
     elif isinstance(result, dict):
-        folders = [_strip_folder(result)]
+        folders = [_strip_folder(result, requesting_athlete_id=athlete_id_to_use)]
     else:
         return "Unexpected response format from folders endpoint."
 
@@ -204,6 +213,7 @@ async def list_workouts(
         own_workouts = [w for w in result if isinstance(w, dict)]
 
     workouts: list[dict[str, Any]] = []
+    shared: bool = False
 
     if folder_id is not None:
         # Filter own workouts by folder
@@ -220,6 +230,7 @@ async def list_workouts(
                 children = _find_folder_children(folders_result, folder_id)
                 if children is not None:
                     workouts = children
+                    shared = True
     else:
         workouts = own_workouts
 
@@ -234,6 +245,12 @@ async def list_workouts(
         fields += _WORKOUT_FULL_EXTRA_FIELDS
 
     output = [_pick_fields(w, fields) for w in workouts]
+
+    if shared:
+        return json.dumps(
+            {"shared": True, "workouts": output},
+            separators=(",", ":"),
+        )
     return json.dumps(output, separators=(",", ":"))
 
 
