@@ -259,6 +259,39 @@ def test_list_workouts_error(monkeypatch):
     assert "Error fetching workouts" in result
 
 
+def test_list_workouts_type_filter(monkeypatch):
+    """workout_type filters workouts by activity type (case-insensitive)."""
+    run_workout = {
+        "id": 3,
+        "name": "Easy Run",
+        "type": "Run",
+        "folder_id": 10,
+        "moving_time": 2400,
+        "icu_training_load": 40,
+        "tags": ["easy"],
+    }
+
+    async def fake_request(*_a, **_kw):
+        return [SAMPLE_WORKOUT_A, SAMPLE_WORKOUT_B, run_workout]
+
+    _patch_workout_lib(monkeypatch, fake_request)
+    result = asyncio.run(_get_tool("list_workouts")(athlete_id="i1", workout_type="run"))
+    workouts = json.loads(result)
+    assert len(workouts) == 1
+    assert workouts[0]["name"] == "Easy Run"
+
+
+def test_list_workouts_type_filter_no_match(monkeypatch):
+    """workout_type that matches nothing returns helpful message."""
+    async def fake_request(*_a, **_kw):
+        return [SAMPLE_WORKOUT_A, SAMPLE_WORKOUT_B]
+
+    _patch_workout_lib(monkeypatch, fake_request)
+    result = asyncio.run(_get_tool("list_workouts")(athlete_id="i1", workout_type="Swim"))
+    assert "No workouts found" in result
+    assert "type 'Swim'" in result
+
+
 # ---------------------------------------------------------------------------
 # get_workout
 # ---------------------------------------------------------------------------

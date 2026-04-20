@@ -181,6 +181,7 @@ async def list_workouts(
     api_key: str = "",
     folder_id: int | None = None,
     compact: bool = True,
+    workout_type: str = "",
 ) -> str:
     """List workouts in the athlete's workout library on Intervals.icu.
 
@@ -201,6 +202,7 @@ async def list_workouts(
                    Works for both own and shared folders.
         compact: If True (default), return a brief summary per workout to save tokens.
                  Full mode adds description, distance, indoor, color, and updated fields.
+        workout_type: Filter by activity type, e.g. "Ride", "Run", "Swim" (optional, case-insensitive).
     """
     athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
     if error_msg:
@@ -241,10 +243,17 @@ async def list_workouts(
     else:
         workouts = own_workouts
 
+    # Apply workout_type filter (case-insensitive)
+    if workout_type:
+        type_lower = workout_type.lower()
+        workouts = [w for w in workouts if str(w.get("type", "")).lower() == type_lower]
+
     if not workouts:
         msg = f"No workouts found for athlete {athlete_id_to_use}"
         if folder_id is not None:
             msg += f" in folder {folder_id}"
+        if workout_type:
+            msg += f" with type '{workout_type}'"
         return msg + "."
 
     fields = list(_WORKOUT_COMPACT_FIELDS)
