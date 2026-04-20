@@ -406,3 +406,86 @@ def test_update_workout_error(monkeypatch):
     _patch_workout_lib(monkeypatch, fake_request)
     result = asyncio.run(_get_tool("update_workout")(workout_id=1, athlete_id="i1", name="X"))
     assert "Error updating workout" in result
+
+
+# ---------------------------------------------------------------------------
+# schedule_workout
+# ---------------------------------------------------------------------------
+
+
+def test_schedule_workout_success(monkeypatch):
+    """Fetches workout and creates calendar event."""
+    calls: list[dict] = []
+
+    async def fake_request(*_a, **kwargs):
+        calls.append(kwargs)
+        url = kwargs.get("url", "")
+        if "/workouts/" in url:
+            return SAMPLE_WORKOUT_A
+        # POST to /events
+        return {"id": 500, "name": "Tempo 2x20", "start_date_local": "2025-07-01T00:00:00"}
+
+    _patch_workout_lib(monkeypatch, fake_request)
+    result = asyncio.run(
+        _get_tool("schedule_workout")(workout_id=1, start_date="2025-07-01", athlete_id="i1")
+    )
+    assert "Successfully scheduled" in result
+    assert "Tempo 2x20" in result
+    assert "event id: 500" in result
+    # Verify the event POST payload
+    event_call = calls[1]
+    assert event_call["method"] == "POST"
+    body = event_call["data"]
+    assert body["category"] == "WORKOUT"
+    assert body["name"] == "Tempo 2x20"
+    assert body["type"] == "Ride"
+    assert body["moving_time"] == 3600
+    assert "workout_doc" in body
+
+
+def test_schedule_workout_invalid_date(monkeypatch):
+    """Invalid date format returns error."""
+    _patch_workout_lib(monkeypatch, lambda *a, **kw: None)
+    result = asyncio.run(
+        _get_tool("schedule_workout")(workout_id=1, start_date="not-a-date", athlete_id="i1")
+    )
+    assert "YYYY-MM-DD" in result
+
+
+def test_schedule_workout_not_found(monkeypatch):
+    """Non-existent workout returns error."""
+    async def fake_request(*_a, **_kw):
+        return {}
+
+    _patch_workout_lib(monkeypatch, fake_request)
+    result = asyncio.run(
+        _get_tool("schedule_workout")(workout_id=999, start_date="2025-07-01", athlete_id="i1")
+    )
+    assert "No workout found" in result
+
+
+def test_schedule_workout_fetch_error(monkeypatch):
+    """API error when fetching workout is surfaced."""
+    async def fake_request(*_a, **_kw):
+        return {"error": True, "message": "Not Found"}
+
+    _patch_workout_lib(monkeypatch, fake_request)
+    result = asyncio.run(
+        _get_tool("schedule_workout")(workout_id=1, start_date="2025-07-01", athlete_id="i1")
+    )
+    assert "Error fetching workout" in result
+
+
+def test_schedule_workout_event_creation_error(monkeypatch):
+    """API error when creating calendar event is surfaced."""
+    async def fake_request(*_a, **kwargs):
+        url = kwargs.get("url", "")
+        if "/workouts/" in url:
+            return SAMPLE_WORKOUT_A
+        return {"error": True, "message": "Server Error"}
+
+    _patch_workout_lib(monkeypatch, fake_request)
+    result = asyncio.run(
+        _get_tool("schedule_workout")(workout_id=1, start_date="2025-07-01", athlete_id="i1")
+    )
+    assert "Error creating calendar event" in result

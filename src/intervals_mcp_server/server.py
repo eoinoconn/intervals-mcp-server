@@ -44,6 +44,7 @@ Usage:
         - get_workout
         - create_workout
         - update_workout
+        - schedule_workout
 
     See the README for more details on configuration and usage.
 """
@@ -109,6 +110,7 @@ from intervals_mcp_server.tools.workout_library import (  # pylint: disable=wron
     get_workout,
     create_workout,
     update_workout,
+    schedule_workout,
 )
 
 # Import resource modules to register them (resources register themselves via @mcp.resource() decorators)
@@ -146,6 +148,7 @@ __all__ = [
     "get_workout",
     "create_workout",
     "update_workout",
+    "schedule_workout",
     "coaching_context_protocol",
 ]
 

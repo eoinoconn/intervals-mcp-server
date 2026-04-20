@@ -31,6 +31,7 @@ from intervals_mcp_server.tools.workout_library import (  # noqa: F401
     get_workout,
     create_workout,
     update_workout,
+    schedule_workout,
 )
 
 
@@ -70,4 +71,5 @@ __all__ = [
     "get_workout",
     "create_workout",
     "update_workout",
+    "schedule_workout",
 ]

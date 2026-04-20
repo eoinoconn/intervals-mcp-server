@@ -2,10 +2,12 @@
 Workout library MCP tools for Intervals.icu.
 
 This module contains tools for browsing and managing the workout library,
-including folders, listing workouts, and creating/updating library workouts.
+including folders, listing workouts, creating/updating library workouts,
+and scheduling library workouts onto the athlete's calendar.
 """
 
 import json
+from datetime import datetime
 from typing import Any
 
 from mcp.types import ToolAnnotations
@@ -442,3 +444,97 @@ async def update_workout(
         return "Error: Unexpected response when updating workout."
 
     return f"Successfully updated workout:\n\n{json.dumps(result, separators=(',', ':'))}"
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        title="Schedule Workout to Calendar",
+    )
+)
+async def schedule_workout(
+    workout_id: int,
+    start_date: str,
+    athlete_id: str = "",
+    api_key: str = "",
+) -> str:
+    """Schedule a library workout onto the athlete's calendar as an event.
+
+    Fetches the workout from the library by ID and creates a calendar event
+    on the specified date with the workout's name, type, steps, and duration.
+    This saves context by combining ``get_workout`` + ``add_or_update_event``
+    into a single call.
+
+    Related tools:
+        - ``get_workout`` — view full workout detail before scheduling
+        - ``list_workouts`` — discover workout IDs
+        - ``add_or_update_event`` — manually create calendar events with custom parameters
+
+    Args:
+        workout_id: The library workout ID to schedule (required).
+                    Use ``list_workouts`` to discover IDs.
+        start_date: Date to place the workout on the calendar in YYYY-MM-DD format (required).
+        athlete_id: The Intervals.icu athlete ID (optional, will use ATHLETE_ID from .env if not provided)
+        api_key: The Intervals.icu API key (optional, will use API_KEY from .env if not provided)
+    """
+    athlete_id_to_use, error_msg = resolve_athlete_id(athlete_id, config.athlete_id)
+    if error_msg:
+        return error_msg
+
+    # Validate date format
+    try:
+        datetime.strptime(start_date, "%Y-%m-%d")
+    except ValueError:
+        return "Error: start_date must be in YYYY-MM-DD format."
+
+    # Fetch the workout from the library
+    workout = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/workouts/{workout_id}",
+        api_key=api_key,
+    )
+
+    if isinstance(workout, dict) and "error" in workout:
+        return f"Error fetching workout: {workout.get('message')}"
+
+    if not workout or not isinstance(workout, dict):
+        return f"No workout found with ID {workout_id}."
+
+    # Build the event payload from the workout
+    event_data: dict[str, Any] = {
+        "start_date_local": start_date + "T00:00:00",
+        "category": "WORKOUT",
+        "name": workout.get("name", ""),
+        "type": workout.get("type", "Ride"),
+    }
+
+    if workout.get("workout_doc"):
+        event_data["workout_doc"] = workout["workout_doc"]
+    if workout.get("description"):
+        event_data["description"] = workout["description"]
+    if workout.get("moving_time"):
+        event_data["moving_time"] = workout["moving_time"]
+    if workout.get("distance"):
+        event_data["distance"] = workout["distance"]
+    if workout.get("color"):
+        event_data["color"] = workout["color"]
+
+    # Create the calendar event
+    result = await make_intervals_request(
+        url=f"/athlete/{athlete_id_to_use}/events",
+        api_key=api_key,
+        data=event_data,
+        method="POST",
+    )
+
+    if isinstance(result, dict) and "error" in result:
+        return f"Error creating calendar event: {result.get('message')}"
+
+    if not result or not isinstance(result, dict):
+        return "Error: Unexpected response when creating calendar event."
+
+    event_id = result.get("id", "")
+    return (
+        f"Successfully scheduled workout '{workout.get('name')}' on {start_date} "
+        f"(event id: {event_id})."
+    )

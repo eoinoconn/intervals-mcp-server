@@ -51,6 +51,7 @@ EXPECTED_ANNOTATIONS = {
     "get_workout": {"title": "Get Workout", "readOnlyHint": True, "destructiveHint": False},
     "create_workout": {"title": "Create Library Workout", "readOnlyHint": False, "destructiveHint": False},
     "update_workout": {"title": "Update Library Workout", "readOnlyHint": False, "destructiveHint": False},
+    "schedule_workout": {"title": "Schedule Workout to Calendar", "readOnlyHint": False, "destructiveHint": False},
 }
 
 
