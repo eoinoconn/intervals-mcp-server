@@ -81,6 +81,12 @@ def test_usage_guide_covers_available_tools():
         "delete_event",
         "delete_events_by_date_range",
         "get_custom_items",
+        "get_workout_folders",
+        "list_workouts",
+        "get_workout",
+        "create_workout",
+        "update_workout",
+        "schedule_workout",
     ]
     for tool in expected_tools:
         assert tool in USAGE_GUIDE, f"Tool {tool!r} missing from AVAILABLE TOOLS"

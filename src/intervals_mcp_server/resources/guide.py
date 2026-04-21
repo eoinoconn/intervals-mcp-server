@@ -74,6 +74,14 @@ Planning / calendar management:
   1. get_events()                  ← view upcoming calendar
   2. add_or_update_event()         ← create or modify a planned workout
 
+Workout library:
+  1. get_workout_folders()         ← discover folder IDs and shared status
+  2. list_workouts(folder_id)      ← browse workouts (supports type filter)
+  3. get_workout(id)               ← full detail including workout_doc steps
+  4. create_workout(folder_id)     ← add a new workout to the library
+  5. update_workout(workout_id)    ← edit an existing library workout
+  6. schedule_workout(id, date)    ← place a library workout on the calendar
+
 Reviewing a period:
   1. get_training_summary(start_date, end_date)
   2. get_wellness_data(start_date, end_date)    ← if wellness detail needed
@@ -96,7 +104,13 @@ AVAILABLE TOOLS
   add_or_update_event       Create or update a planned workout on the calendar.
   delete_event              Remove an event from the calendar.
   delete_events_by_date_range  Bulk delete events within a date range.
-  get_custom_items          Athlete custom charts, fields, and zones.\
+  get_custom_items          Athlete custom charts, fields, and zones.
+  get_workout_folders       Workout library folders with shared indicator.
+  list_workouts             Library workouts with folder/type filter and compact mode.
+  get_workout               Full workout detail including workout_doc steps.
+  create_workout            Add a new workout to the library.
+  update_workout            Edit an existing library workout.
+  schedule_workout          Schedule a library workout onto the calendar by ID.\
 """
 
 
