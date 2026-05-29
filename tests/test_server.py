@@ -1684,7 +1684,16 @@ def test_get_activities_resolves_gear_name(monkeypatch):
         "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
     )
 
-    result = asyncio.run(get_activities(athlete_id="1", limit=2, include_unnamed=True, start_date="2024-01-01", end_date="2024-01-03", compact=False))
+    result = asyncio.run(
+        get_activities(
+            athlete_id="1",
+            limit=2,
+            include_unnamed=True,
+            start_date="2024-01-01",
+            end_date="2024-01-03",
+            compact=False,
+        )
+    )
     assert "Ride 1" in result
     assert "Ride 2" in result
     assert "Name: Litening Air" in result
