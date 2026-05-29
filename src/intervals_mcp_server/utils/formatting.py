@@ -244,6 +244,26 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     if device:
         lines.append(f"  Device: {device}")
 
+    # Gear (bike, shoes) - resolved by tools.gear module
+    gear_lines: list[str] = []
+    resolved_name = activity.get("_resolved_gear_name")
+    gear_raw = activity.get("gear")
+    if resolved_name:
+        gear_name = resolved_name
+        if isinstance(gear_raw, dict):
+            gear_id = gear_raw.get("id", activity.get("gear_id"))
+        else:
+            gear_id = activity.get("gear_id")
+    elif isinstance(gear_raw, dict):
+        gear_name = gear_raw.get("name") or gear_raw.get("display_name")
+        gear_id = gear_raw.get("id")
+    else:
+        gear_name = activity.get("gear_name")
+        gear_id = activity.get("gear_id")
+    _add_field(gear_lines, "Name", gear_name)
+    _add_field(gear_lines, "ID", gear_id)
+    _add_section(lines, "  Gear:", gear_lines)
+
     return "\n".join(lines)
 
 

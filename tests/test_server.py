@@ -1483,3 +1483,209 @@ def test_get_activity_histogram_error(monkeypatch):
     )
     result = asyncio.run(get_activity_histogram("999", histogram_type="power"))
     assert "Error fetching power histogram" in result
+
+
+# ---- Gear tools tests ----
+
+from intervals_mcp_server.server import get_gear_list  # pylint: disable=wrong-import-position  # noqa: E402
+from intervals_mcp_server.tools import gear as gear_module  # pylint: disable=wrong-import-position  # noqa: E402
+
+
+def _reset_gear_cache():
+    """Helper to clear the module-level gear cache between tests."""
+    gear_module._GEAR_RAW_CACHE.clear()  # pylint: disable=protected-access
+
+
+def test_get_gear_list(monkeypatch):
+    """
+    Test get_gear_list returns a formatted catalog with id, type, name and stats.
+    """
+    _reset_gear_cache()
+
+    sample_gear = [
+        {
+            "id": "b1",
+            "type": "Bike",
+            "name": "Litening Air",
+            "default_for_type": "Ride",
+            "activities": 100,
+            "distance": 4_155_700,
+            "retired": False,
+        },
+        {
+            "id": "b2",
+            "type": "Bike",
+            "name": "Retired bike",
+            "activities": 50,
+            "distance": 2_000_000,
+            "retired": True,
+        },
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        return sample_gear
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(get_gear_list(athlete_id="i1"))
+
+    assert "Gear catalog for athlete i1:" in result
+    assert "Litening Air" in result
+    assert "b1" in result
+    assert "Retired bike" in result
+    assert "yes" in result  # retired flag rendered
+    assert "Ride" in result  # default_for_type rendered
+
+
+def test_get_gear_list_empty(monkeypatch):
+    """
+    Test get_gear_list returns an informative message when no gear is configured.
+    """
+    _reset_gear_cache()
+
+    async def fake_request(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(get_gear_list(athlete_id="i1"))
+    assert "No gear found" in result
+
+
+def test_get_gear_list_cache_and_refresh(monkeypatch):
+    """
+    Test that get_gear_list caches the catalog and that refresh=True busts the cache.
+    """
+    _reset_gear_cache()
+
+    call_count = {"n": 0}
+    sample_gear = [
+        {
+            "id": "b1",
+            "type": "Bike",
+            "name": "Litening Air",
+            "activities": 100,
+            "distance": 4_155_700,
+        }
+    ]
+
+    async def fake_request(*_args, **_kwargs):
+        call_count["n"] += 1
+        return sample_gear
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+
+    # First call: cache cold, one API hit expected.
+    asyncio.run(get_gear_list(athlete_id="i1"))
+    assert call_count["n"] == 1
+
+    # Second call: cache warm, no additional API hit.
+    asyncio.run(get_gear_list(athlete_id="i1"))
+    assert call_count["n"] == 1
+
+    # refresh=True busts the cache and triggers a fresh fetch.
+    asyncio.run(get_gear_list(athlete_id="i1", refresh=True))
+    assert call_count["n"] == 2
+
+
+def test_get_activity_details_resolves_gear_name(monkeypatch):
+    """
+    Test get_activity_details injects the resolved gear name into the formatted output
+    when the activity payload contains a gear_id.
+    """
+    _reset_gear_cache()
+
+    activity = {
+        "name": "Morning Ride",
+        "id": 123,
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 1000,
+        "duration": 3600,
+        "gear_id": "b1",
+    }
+    gear_catalog = [{"id": "b1", "type": "Bike", "name": "Litening Air"}]
+
+    async def fake_request(url=None, **_kwargs):
+        # The activity endpoint and the gear endpoint share the same fake
+        # request; route by URL pattern.
+        if url and "/gear" in url:
+            return gear_catalog
+        return activity
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+    # get_activity_details does not accept athlete_id; gear resolution falls
+    # back to the configured ATHLETE_ID, which is unset under CI. Provide one.
+    monkeypatch.setattr(gear_module.config, "athlete_id", "1")
+
+    result = asyncio.run(get_activity_details("123"))
+    assert "Activity: Morning Ride" in result
+    assert "Gear:" in result
+    assert "Name: Litening Air" in result
+    assert "ID: b1" in result
+
+
+def test_get_activities_resolves_gear_name(monkeypatch):
+    """
+    Test get_activities injects resolved gear names for each activity in the list.
+    """
+    _reset_gear_cache()
+
+    activities = [
+        {
+            "name": "Ride 1",
+            "id": 1,
+            "type": "Ride",
+            "startTime": "2024-01-01T08:00:00Z",
+            "distance": 1000,
+            "duration": 3600,
+            "gear_id": "b1",
+        },
+        {
+            "name": "Ride 2",
+            "id": 2,
+            "type": "Ride",
+            "startTime": "2024-01-02T08:00:00Z",
+            "distance": 2000,
+            "duration": 5400,
+            "gear_id": "b2",
+        },
+    ]
+    gear_catalog = [
+        {"id": "b1", "type": "Bike", "name": "Litening Air"},
+        {"id": "b2", "type": "Bike", "name": "S-Works Tarmac SL8"},
+    ]
+
+    async def fake_request(url=None, **_kwargs):
+        if url and "/gear" in url:
+            return gear_catalog
+        return activities
+
+    monkeypatch.setattr("intervals_mcp_server.api.client.make_intervals_request", fake_request)
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.activities.make_intervals_request", fake_request
+    )
+    monkeypatch.setattr(
+        "intervals_mcp_server.tools.gear.make_intervals_request", fake_request
+    )
+
+    result = asyncio.run(get_activities(athlete_id="1", limit=2, include_unnamed=True, start_date="2024-01-01", end_date="2024-01-03", compact=False))
+    assert "Ride 1" in result
+    assert "Ride 2" in result
+    assert "Name: Litening Air" in result
+    assert "Name: S-Works Tarmac SL8" in result
