@@ -209,6 +209,20 @@ def format_activity_summary(activity: dict[str, Any]) -> str:
     _add_field(other_lines, "Feel", feel)
     _add_section(lines, "  Metrics:", other_lines)
 
+    # Running dynamics - only non-None (populated for runs with a
+    # running-dynamics source: HRM-Pro/Run, HRM-Tri, RD pod, Coros, etc.)
+    rd_lines: list[str] = []
+    _add_field(rd_lines, "Stance Time", activity.get("average_stance_time"), "ms")
+    _add_field(rd_lines, "Stance Time %", activity.get("average_stance_time_percent"), "%")
+    _add_field(rd_lines, "Stance Time Balance", activity.get("average_stance_time_balance"), "%")
+    _add_field(rd_lines, "Vertical Oscillation", activity.get("average_vertical_oscillation"))
+    _add_field(rd_lines, "Vertical Ratio", activity.get("average_vertical_ratio"), "%")
+    _add_field(rd_lines, "Vertical Speed", activity.get("average_vertical_speed"), "m/s")
+    _add_field(rd_lines, "Step Length", activity.get("average_step_length"))
+    _add_field(rd_lines, "Leg Spring Stiffness", activity.get("average_leg_spring_stiffness"))
+    _add_field(rd_lines, "Impact Loading Rate", activity.get("average_impact_loading_rate"))
+    _add_section(lines, "  Running Dynamics:", rd_lines)
+
     # Environment - only if any data exists
     env_lines: list[str] = []
     _add_field(env_lines, "Trainer", activity.get("trainer"))

@@ -64,6 +64,49 @@ def test_format_activity_summary_omits_none_fields():
     assert "Power Meter" not in result
     assert "N/A" not in result
 
+def test_format_activity_summary_includes_running_dynamics():
+    """
+    Test that format_activity_summary surfaces running-dynamics fields when present.
+    """
+    data = {
+        "name": "Threshold Run",
+        "id": "r1",
+        "type": "Run",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 10000,
+        "duration": 3000,
+        "average_stance_time": 245.3,
+        "average_stance_time_balance": 49.8,
+        "average_vertical_oscillation": 8.1,
+        "average_vertical_ratio": 6.4,
+        "average_step_length": 1180.0,
+        "average_leg_spring_stiffness": 9.2,
+    }
+    result = format_activity_summary(data)
+    assert "Running Dynamics:" in result
+    assert "Stance Time: 245.3 ms" in result
+    assert "Stance Time Balance: 49.8 %" in result
+    assert "Vertical Oscillation: 8.1" in result
+    assert "Vertical Ratio: 6.4 %" in result
+    assert "Step Length: 1180.0" in result
+    assert "Leg Spring Stiffness: 9.2" in result
+
+
+def test_format_activity_summary_omits_running_dynamics_when_absent():
+    """
+    Test that the Running Dynamics section is omitted for activities with no such data.
+    """
+    data = {
+        "name": "Morning Ride",
+        "id": "b1",
+        "type": "Ride",
+        "startTime": "2024-01-01T08:00:00Z",
+        "distance": 30000,
+        "duration": 3600,
+        "average_watts": 200,
+    }
+    result = format_activity_summary(data)
+    assert "Running Dynamics:" not in result
 
 def test_format_activity_summary_with_compliance():
     """
